@@ -1,0 +1,325 @@
+/*!
+	implement monitor orderings:
+		use monitor distinction (y/n)
+			order monitors (somehow)
+
+
+
+	implement different orderings:
+		by time (use _NET_CLIENT_LIST)
+		by z-order (use _NET_CLIENT_LIST_STACKING)
+*/
+
+/*!
+	look into what kind of data we would like from the windows
+*/
+
+/*!
+	look into the unlikely possibility that we can record whenever windows open and close (will speed execution up by god knows)
+
+	if the above is possible, do a sweep on program startup
+*/
+
+
+
+
+
+
+
+
+
+/*! microtabber.cold
+
+MIT License
+
+Copyright (C) 2023 Stefanos "Steven" Tsakiris
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
+/*!includes:{*/
+	#include <stdarg.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <xcb/randr.h>
+	#include <xcb/xcb.h>
+	#include <xcb/xcbext.h>
+	#include "cold/cold.hold"
+/*!}*/
+
+/*!defines:{*/
+	#define DEBUG /*--------------------*/ (true)
+
+	#define PRINTERROR_DEC /*-----------*/ local void printError(const char *const string)
+	#define PRINTPROPERERROR_DEC /*-----*/ void printProperError(const char *const message, ...)
+	#define OPENERRORSTREAM_DEC /*------*/ local bool openErrorStream(void)
+	#define CLOSEERRORSTREAM_DEC /*-----*/ local void closeErrorStream(void)
+	#define PRINTCONNECTIONERROR_DEC /*-*/ local void printConnectionError(void)
+/*!}*/
+
+/*!defs:{*/
+/*!}*/
+
+/*!globals:{*/
+	const char * /*-------*/ programName;
+	const char * /*-------*/ errorPath;
+	bool /*---------------*/ mustOpenErrorStream;
+	FILE * /*-------------*/ errorStream;
+	char * /*-------------*/ connectionName;
+	xcb_connection_t * /*-*/ connection;
+	xcb_screen_t * /*-----*/ screen;
+
+
+
+	uint8 /*--------------*/ depth;
+	xcb_colormap_t /*-----*/ colormap;
+	xcb_visualid_t /*-----*/ visual;
+
+
+
+	xcb_window_t /*-------*/ window;
+
+
+
+	xcb_atom_t _NET_CLIENT_LIST;
+	xcb_atom_t _NET_CLIENT_LIST_STACKING;
+	void *reply;
+
+
+
+	xcb_generic_event_t * /*-*/ event0;
+	xcb_generic_event_t * /*-*/ event1;
+
+
+
+/*!}*/
+
+/*!functions:{*/
+	PRINTERROR_DEC;
+	PRINTPROPERERROR_DEC;
+	OPENERRORSTREAM_DEC;
+	CLOSEERRORSTREAM_DEC;
+	PRINTCONNECTIONERROR_DEC;
+/*!}*/
+
+int main(const int argumentAmount, const char *const *argument){
+	(void)argumentAmount;
+	programName = *argument;
+	mustOpenErrorStream = false;
+	connectionName = NULL;
+	jmp establishServerConnection;
+	establishServerConnection:{
+		int screenNumber = 0;
+		connection = xcb_connect_to_display_with_auth_info(connectionName, NULL, &screenNumber);
+		screen = xcb_setup_roots_iterator(xcb_get_setup(connection)).data + screenNumber;
+		switch xcb_connection_has_error(connection) over
+			to XCB_NONE: /*------------*/ /*-----------------------------------------------------------------*/ jmp setupScreenProfile;
+			to XCB_CONN_CLOSED_PARSE_ERR: printError(connectionName? "invalid server name" : "no server name"); jmp mainEmergencyExit;
+			off: /*--------------------*/ printConnectionError(); /*-----------------------------------------*/ jmp mainEmergencyExit;
+		end
+	}
+	setupScreenProfile:{
+		xcb_depth_iterator_t depthIterator = xcb_screen_allowed_depths_iterator(screen);
+		xcb_visualtype_iterator_t visualIterator;
+		visual = (*screen).root_visual;
+		depth = (*screen).root_depth;
+		findDepth:{
+			if((*depthIterator.data).depth == 32){
+				visualIterator = xcb_depth_visuals_iterator(depthIterator.data);
+				jmp findVisual;
+			}
+			if(depthIterator.rem){
+				xcb_depth_next(&depthIterator);
+				jmp findDepth;
+			}
+			printError("could not find a 32-bit depth visual, using default screen visual instead");
+			jmp setupColormap;
+		}
+		findVisual:{
+			if((*visualIterator.data)._class == XCB_VISUAL_CLASS_TRUE_COLOR){
+				visual = (*visualIterator.data).visual_id;
+				depth = (*depthIterator.data).depth;
+				jmp setupColormap;
+			}
+			if(visualIterator.rem){
+				dec visualIterator.rem;
+				inc visualIterator.data;
+				jmp findVisual;
+			}
+			printError("could not find a 32-bit depth visual (depth doesn't match the visual), using default screen visual instead");
+			jmp setupColormap;
+		}
+	}
+	setupColormap:{
+		colormap = xcb_generate_id(connection);
+		xcb_create_colormap(connection, XCB_COLORMAP_ALLOC_NONE, colormap, (*screen).root, visual);
+		jmp createWindows;
+	}
+	createWindows:{
+		struct{
+			uint32 backgroundColor;
+			uint32 borderColor;
+			uint32 overrideRedirect;
+			xcb_colormap_t colormap;
+		} attribute;
+		attribute.backgroundColor = 0xFFFFFFFF;
+		attribute.borderColor = 0xFFFFFFFF;
+		attribute.overrideRedirect = true;
+		attribute.colormap = colormap;
+		window = xcb_generate_id(connection);
+		xcb_create_window(connection, depth, window, (*screen).root, 100, 100, 100, 100, 100, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_COLORMAP, &attribute.backgroundColor);
+		jmp mapWindow;
+	}
+	mapWindow:{
+		const uint32 attribute = XCB_STACK_MODE_ABOVE;
+		xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_STACK_MODE, &attribute);
+		xcb_map_window(connection, window);
+		xcb_flush(connection);
+		jmp getAtoms;
+	}
+	getAtoms:{
+		xcb_intern_atom_cookie_t cookie0 = xcb_intern_atom(connection, false, sizeof("_NET_CLIENT_LIST") - 1, "_NET_CLIENT_LIST");
+		xcb_intern_atom_cookie_t cookie1 = xcb_intern_atom(connection, false, sizeof("_NET_CLIENT_LIST_STACKING") - 1, "_NET_CLIENT_LIST_STACKING");
+		if((reply = xcb_wait_for_reply(connection, cookie0.sequence, NULL))){
+			_NET_CLIENT_LIST = (*(xcb_intern_atom_reply_t *)reply).atom;
+			free(reply); reply = NULL;
+		}else{
+			fprintf(stderr, "could not get _NET_CLIENT_LIST atom\n");
+		}
+		if((reply = xcb_wait_for_reply(connection, cookie1.sequence, NULL))){
+			_NET_CLIENT_LIST_STACKING = (*(xcb_intern_atom_reply_t *)reply).atom;
+			free(reply); reply = NULL;
+		}else{
+			fprintf(stderr, "could not get _NET_CLIENT_LIST_STACKING atom\n");
+		}
+	}
+
+
+
+
+
+
+
+
+	{
+		xcb_get_property_reply_t *prop_reply = xcb_get_property_reply(connection, xcb_get_property(connection, 0, (*screen).root, _NET_CLIENT_LIST, XCB_ATOM_WINDOW, 0, 1024), NULL);
+		if(prop_reply){
+			xcb_window_t *windows = xcb_get_property_value(prop_reply);
+			int num_windows = xcb_get_property_value_length(prop_reply) / sizeof(xcb_window_t);
+			int i = 0;
+			fprintf(stdout, "Number of windows: %d\n", num_windows);
+			while(i < num_windows){
+				fprintf(stdout, "Window %d: 0x%08x\n", i, windows[i]);
+				inc i;
+			}
+			free(prop_reply);
+		}else{
+			fprintf(stderr, "Failed to retrieve property values\n");
+			xcb_disconnect(connection);
+			ret 1;
+		}
+	}
+
+
+
+
+
+
+
+
+
+	eventLoop:{
+		xcb_flush(connection);
+		free(event0);
+		if(event1){
+			event0 = event1;
+			event1 = NULL;
+			jmp switchEvents;
+		}
+		event0 = NULL;
+		jmp waitForEvent;
+	}
+	waitForEvent:{
+		if((event0 = xcb_wait_for_event(connection))){
+			jmp switchEvents;
+		}
+		if(xcb_connection_has_error(connection)){
+			printConnectionError();
+			jmp eventLoopExit;
+		}
+		jmp switchEvents;
+	}
+	switchEvents:{
+		fprintf(stdout, "%u\n", (*event0).response_type & ~128);
+		jmp eventLoop;
+	}
+
+
+
+
+
+
+
+
+
+	eventLoopExit:
+	mainEmergencyExit:{
+		xcb_disconnect(connection); connection = NULL;
+		ret 0;
+	}
+}
+PRINTERROR_DEC{
+	printProperError("%s: %s\n", programName, string);
+	ret;
+}
+PRINTPROPERERROR_DEC{
+	if(openErrorStream()){
+		va_list arguments;
+		va_start(arguments, message);
+		vfprintf(errorStream, message, arguments);
+		va_end(arguments);
+		closeErrorStream();
+	}
+	ret;
+}
+OPENERRORSTREAM_DEC{
+	ret !mustOpenErrorStream or (errorStream = fopen(errorPath, "a"));
+}
+CLOSEERRORSTREAM_DEC{
+	if(mustOpenErrorStream and errorStream){
+		fclose(errorStream); errorStream = NULL;
+	}
+	ret;
+}
+PRINTCONNECTIONERROR_DEC{
+	const char *string;
+	jmp findConnectionError;
+	findConnectionError: switch xcb_connection_has_error(connection) over
+		to XCB_CONN_ERROR: /*-------------------*/ string = "socket / pipe / stream"; /*----*/ jmp printConnectionError;
+		to XCB_CONN_CLOSED_EXT_NOTSUPPORTED: /*-*/ string = "extension not supported"; /*---*/ jmp printConnectionError;
+		to XCB_CONN_CLOSED_MEM_INSUFFICIENT: /*-*/ string = "insufficient memory"; /*-------*/ jmp printConnectionError;
+		to XCB_CONN_CLOSED_REQ_LEN_EXCEED: /*---*/ string = "exceeded request length"; /*---*/ jmp printConnectionError;
+		to XCB_CONN_CLOSED_PARSE_ERR: /*--------*/ string = "parsing display string"; /*----*/ jmp printConnectionError;
+		to XCB_CONN_CLOSED_INVALID_SCREEN: /*---*/ string = "screen - display mismatch"; /*-*/ jmp printConnectionError;
+		off: /*---------------------------------*/ string = "unrecognized connection"; /*---*/ jmp printConnectionError;
+	end
+	printConnectionError:{
+		printProperError("%s: fatal %s error, exiting\n", programName, string);
+		ret;
+	}
+}
