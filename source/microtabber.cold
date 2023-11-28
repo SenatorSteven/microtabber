@@ -3,8 +3,6 @@
 		use monitor distinction (y/n)
 			order monitors (somehow)
 
-
-
 	implement different orderings:
 		by time (use _NET_CLIENT_LIST)
 		by z-order (use _NET_CLIENT_LIST_STACKING)
@@ -65,48 +63,95 @@ SOFTWARE. */
 /*!defines:{*/
 	#define DEBUG /*--------------------*/ (true)
 
+
+
+
+
+
+
+
+
+	/*!
+		move this cold.hold
+	*/
+	#define EMPTY_MACRO /*--------------*/
+
+
+
+
+
+
+
+
+
 	#define PRINTERROR_DEC /*-----------*/ local void printError(const char *const string)
-	#define PRINTPROPERERROR_DEC /*-----*/ void printProperError(const char *const message, ...)
+	#define PRINTPROPERERROR_DEC /*-----*/ local void printProperError(const char *const message, ...)
 	#define OPENERRORSTREAM_DEC /*------*/ local bool openErrorStream(void)
 	#define CLOSEERRORSTREAM_DEC /*-----*/ local void closeErrorStream(void)
 	#define PRINTCONNECTIONERROR_DEC /*-*/ local void printConnectionError(void)
+
+	#if DEBUG
+		#define printEvent(void) /*-----------*/ (fprintf(stderr, "%s: event: %s\n", programName, *(eventName + (((*event0).response_type & ~128) > 35? 1 : (*event0).response_type & ~128))))
+		#define printUnexpectedEvent(void) /*-*/ (fprintf(stderr, "%s: unexpected event (%s), ignored\n", programName, *(eventName + (((*event0).response_type & ~128) > 35? 1 : (*event0).response_type & ~128))))
+	#else
+		#define printEvent(void) /*-----------*/ EMPTY_MACRO
+		#define printUnexpectedEvent(void) /*-*/ EMPTY_MACRO
+	#endif
 /*!}*/
 
 /*!defs:{*/
+	def struct{
+		uint /*---------*/ x;
+		uint /*---------*/ y;
+		uint /*---------*/ width;
+		uint /*---------*/ height;
+		xcb_window_t /*-*/ window;
+	} Monitor;
 /*!}*/
 
 /*!globals:{*/
-	const char * /*-------*/ programName;
-	const char * /*-------*/ errorPath;
-	bool /*---------------*/ mustOpenErrorStream;
-	FILE * /*-------------*/ errorStream;
-	char * /*-------------*/ connectionName;
-	xcb_connection_t * /*-*/ connection;
-	xcb_screen_t * /*-----*/ screen;
+	const char * /*----------*/ programName;
+	const char * /*----------*/ errorPath;
+	bool /*------------------*/ mustOpenErrorStream;
+	FILE * /*----------------*/ errorStream;
+	char * /*----------------*/ connectionName;
+	xcb_connection_t * /*----*/ connection;
+	xcb_screen_t * /*--------*/ screen;
 
 
 
-	uint8 /*--------------*/ depth;
-	xcb_colormap_t /*-----*/ colormap;
-	xcb_visualid_t /*-----*/ visual;
+	uint8 /*-----------------*/ depth;
+	xcb_colormap_t /*--------*/ colormap;
+	xcb_visualid_t /*--------*/ visual;
 
 
 
-	xcb_window_t /*-------*/ window;
+	uint /*------------------*/ monitorAmount;
+	Monitor * /*-------------*/ monitorStart;
 
 
 
-	xcb_atom_t _NET_CLIENT_LIST;
-	xcb_atom_t _NET_CLIENT_LIST_STACKING;
-	void *reply;
+	xcb_atom_t /*------------*/ _NET_CLIENT_LIST;
+	xcb_atom_t /*------------*/ _NET_CLIENT_LIST_STACKING;
+	xcb_atom_t /*------------*/ _NET_WM_NAME;
+	xcb_atom_t /*------------*/ UTF8_STRING;
+	void * /*----------------*/ reply;
+
+
+
+	bool /*------------------*/ toggle;
+	bool /*------------------*/ mapped;
 
 
 
 	xcb_generic_event_t * /*-*/ event0;
 	xcb_generic_event_t * /*-*/ event1;
 
-
-
+	#if DEBUG
+		const char *const eventName[] = {"None", "Unrecognized", "KeyPress", "KeyRelease", "ButtonPress", "ButtonRelease", "MotionNotify", "EnterNotify", "LeaveNotify", "FocusIn", "FocusOut", "KeymapNotify", "Expose", "GraphicsExpose", "NoExpose", "VisibilityNotify", "CreateNotify", "DestroyNotify", "UnmapNotify", "MapNotify", "MapRequest", "ReparentNotify", "ConfigureNotify", "ConfigureRequest", "GravityNotify", "ResizeRequest", "CirculateNotify", "CirculateRequest", "PropertyNotify", "SelectionClear", "SelectionRequest", "SelectionNotify", "ColormapNotify", "ClientMessage", "MappingNotify", "GenericEvent"};
+	#endif
+	const char *const majorCodeName[] = {"unrecognized", "create window", "change window attributes", "get window attributes", "destroy window", "destroy subwindows", "change save set", "reparent window", "map window", "map subwindows", "unmap window", "unmap subwindows", "configure window", "circulate window", "get geometry", "query tree", "intern atom", "get atom name", "change property", "delete property", "get property", "list properties", "set selection owner", "get selection owner", "convert selection", "send event", "grab pointer", "ungrab pointer", "grab button", "ungrab button", "change active pointer grab", "grab keyboard", "ungrab keyboard", "grab key", "ungrab key", "allow events", "grab server", "ungrab server", "query pointer", "get motion events", "translate coordinates", "warp pointer", "set input focus", "get input focus", "query keymap", "open font", "close font", "query font", "query text extents", "list fonts", "list fonts with info", "set font path", "get font path", "create pixmap", "free pixmap", "create graphics context", "change graphics context", "copy graphics context", "set dashes", "set clip rectangles", "free graphics context", "clear area", "copy area", "copy plane", "poly point", "poly line", "poly segment", "poly rectangle", "poly arc", "fill poly", "poly fill rectangle", "poly fill arc", "put image", "get image", "poly text (8)", "poly text (16)", "image text (8)", "image text (16)", "create colormap", "free colormap", "copy colormap and free", "install colormap", "uninstall colormap", "list installed colormaps", "allocate color", "allocate named color", "allocate color cells", "allocate color planes", "free colors", "store colors", "store named color", "query colors", "lookup color", "create cursor", "create glyph cursor", "free cursor", "recolor cursor", "query best size", "query extension", "list extensions", "change keyboard mapping", "get keyboard mapping", "change keyboard control", "get keyboard control", "bell", "change pointer control", "get pointer control", "set screen saver", "get screen saver", "change hosts", "list hosts", "set access control", "set close down mode", "kill client", "rotate properties", "force screen saver", "set pointer mapping", "get pointer mapping", "set modifier mapping", "get modifier mapping", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "no"};
+	const char *const errorCodeName[] = {"unrecognized", "request", "value", "window", "pixmap", "atom", "cursor", "font", "match", "drawable", "access", "allocation", "colormap", "graphics context", "id choice", "name", "length", "implementation"};
 /*!}*/
 
 /*!functions:{*/
@@ -118,11 +163,28 @@ SOFTWARE. */
 /*!}*/
 
 int main(const int argumentAmount, const char *const *argument){
-	(void)argumentAmount;
-	programName = *argument;
-	mustOpenErrorStream = false;
-	connectionName = NULL;
-	jmp establishServerConnection;
+	jmp setGlobals;
+	setGlobals:{
+		programName /*---------*/ = *argument;
+		errorPath /*-----------*/ = NULL;
+		mustOpenErrorStream /*-*/ = false;
+		connectionName /*------*/ = NULL;
+		connection /*----------*/ = NULL;
+		screen /*--------------*/ = NULL;
+		monitorStart /*--------*/ = NULL;
+		reply /*---------------*/ = NULL;
+		event0 /*--------------*/ = NULL;
+		event1 /*--------------*/ = NULL;
+		mapped /*--------------*/ = false;
+		jmp getProgramArguments;
+	}
+	getProgramArguments:{
+		if(argumentAmount > 1){
+			fprintf(stderr, "%s: usage: %s\n", programName, programName);
+			ret 1;
+		}
+		jmp establishServerConnection;
+	}
 	establishServerConnection:{
 		int screenNumber = 0;
 		connection = xcb_connect_to_display_with_auth_info(connectionName, NULL, &screenNumber);
@@ -166,11 +228,21 @@ int main(const int argumentAmount, const char *const *argument){
 		}
 	}
 	setupColormap:{
+
+
+
+		/*!
+			error checking
+		*/
+
+
+
 		colormap = xcb_generate_id(connection);
 		xcb_create_colormap(connection, XCB_COLORMAP_ALLOC_NONE, colormap, (*screen).root, visual);
-		jmp createWindows;
+		xcb_randr_select_input_checked(connection, (*screen).root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
+		jmp setupMonitors;
 	}
-	createWindows:{
+	setupMonitors:{
 		struct{
 			uint32 backgroundColor;
 			uint32 borderColor;
@@ -181,20 +253,120 @@ int main(const int argumentAmount, const char *const *argument){
 		attribute.borderColor = 0xFFFFFFFF;
 		attribute.overrideRedirect = true;
 		attribute.colormap = colormap;
-		window = xcb_generate_id(connection);
-		xcb_create_window(connection, depth, window, (*screen).root, 100, 100, 100, 100, 100, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_COLORMAP, &attribute.backgroundColor);
-		jmp mapWindow;
-	}
-	mapWindow:{
-		const uint32 attribute = XCB_STACK_MODE_ABOVE;
-		xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_STACK_MODE, &attribute);
-		xcb_map_window(connection, window);
-		xcb_flush(connection);
+		/*!
+			rewrite this to be sure and for more speed (cookies)
+		*/
+		if(!(reply = xcb_wait_for_reply(connection, xcb_randr_get_monitors(connection, (*screen).root, false).sequence, NULL))){
+			printError("could not get number of monitors");
+			monitorAmount = 1;
+		}else{
+			monitorAmount = (*(xcb_randr_get_monitors_reply_t *)reply).nMonitors;
+			free(reply); reply = NULL;
+		}
+		/*!
+			error check
+		*/
+		monitorStart = realloc(NULL, monitorAmount * sizeof(Monitor));
+		fprintf(stdout, "number of            monitors: %u\n", monitorAmount);
+
+
+
+
+
+
+
+
+
+		/*!
+			two monitors but same output: should weed these out. you can check x, y equality.
+		*/
+		/*!
+			rewrite this to be sure and for more speed (focus on the cookies)
+		*/
+		{
+			void *agp0;
+			void *agp1;
+			if(!(agp0 = xcb_wait_for_reply(connection, xcb_randr_get_screen_resources_current(connection, (*screen).root).sequence, NULL))){
+				fprintf(stdout, "%s: could not get screen resources\n", programName);
+			}else{
+				const xcb_randr_output_t *outputCurrent = xcb_randr_get_screen_resources_current_outputs(agp0);
+				xcb_randr_crtc_t crtc;
+				Monitor *monitorCurrent = monitorStart;
+				const xcb_randr_output_t *outputWall = outputCurrent + monitorAmount;
+				storeMonitorData:{
+					if(!(agp1 = xcb_wait_for_reply(connection, xcb_randr_get_output_info(connection, *outputCurrent, XCB_CURRENT_TIME).sequence, NULL))){
+						fprintf(stdout, "%s: could not get output info\n", programName);
+						jmp storeMonitorDataLoopControl;
+					}
+					crtc = (*(xcb_randr_get_output_info_reply_t *)agp1).crtc;
+					free(agp1); agp1 = NULL;
+					if(crtc == XCB_NONE){
+						jmp storeMonitorDataLoopControl;
+					}
+					if(!(agp1 = xcb_wait_for_reply(connection, xcb_randr_get_crtc_info(connection, crtc, XCB_CURRENT_TIME).sequence, NULL))){
+						fprintf(stdout, "%s: could not get crtc info\n", programName);
+						jmp storeMonitorDataLoopControl;
+					}
+					(*monitorCurrent).x = (*(xcb_randr_get_crtc_info_reply_t *)agp1).x;
+					(*monitorCurrent).y = (*(xcb_randr_get_crtc_info_reply_t *)agp1).y;
+					{
+						Monitor *m = monitorStart;
+						loop:{
+							if(m < monitorCurrent){
+								if((*m).x == (*monitorCurrent).x and (*m).y == (*monitorCurrent).y){
+									dec monitorAmount;
+									free(agp1); agp1 = NULL;
+									jmp storeMonitorDataLoopControl;
+								}
+								inc m;
+								jmp loop;
+							}
+						}
+					}
+					(*monitorCurrent).width  = (*(xcb_randr_get_crtc_info_reply_t *)agp1).width;
+					(*monitorCurrent).height = (*(xcb_randr_get_crtc_info_reply_t *)agp1).height;
+					{
+						const xcb_window_t window = xcb_generate_id(connection);
+						xcb_create_window(connection, depth, window, (*screen).root, (*monitorCurrent).x + (*monitorCurrent).width / 4, (*monitorCurrent).y + (*monitorCurrent).height / 4, (*monitorCurrent).width / 2, (*monitorCurrent).height / 2, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_COLORMAP, &attribute.backgroundColor);
+						(*monitorCurrent).window = window;
+					}
+					inc monitorCurrent;
+					free(agp1); agp1 = NULL;
+					storeMonitorDataLoopControl:{
+						if(inc outputCurrent < outputWall){
+							jmp storeMonitorData;
+						}
+					}
+				}
+				free(agp0); agp0 = NULL;
+			}
+		}
+		/*!
+			error check
+		*/
+		monitorStart = realloc(monitorStart, monitorAmount * sizeof(Monitor));
+		fprintf(stdout, "number of meaningful monitors: %u\n", monitorAmount);
+
+
+
+		{
+			uint32 event_mask = XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY;
+			xcb_change_window_attributes(connection, (*screen).root, XCB_CW_EVENT_MASK, &event_mask);
+		}
+
+
+
+
+
+
 		jmp getAtoms;
 	}
 	getAtoms:{
-		xcb_intern_atom_cookie_t cookie0 = xcb_intern_atom(connection, false, sizeof("_NET_CLIENT_LIST") - 1, "_NET_CLIENT_LIST");
-		xcb_intern_atom_cookie_t cookie1 = xcb_intern_atom(connection, false, sizeof("_NET_CLIENT_LIST_STACKING") - 1, "_NET_CLIENT_LIST_STACKING");
+		#define xcb_intern_atom(a, b, c) /*-*/ xcb_intern_atom(a, b, sizeof(c) - 1, c)
+		xcb_intern_atom_cookie_t cookie0 = xcb_intern_atom(connection, false, "_NET_CLIENT_LIST");
+		xcb_intern_atom_cookie_t cookie1 = xcb_intern_atom(connection, false, "_NET_CLIENT_LIST_STACKING");
+		xcb_intern_atom_cookie_t cookie2 = xcb_intern_atom(connection, false, "_NET_WM_NAME");
+		xcb_intern_atom_cookie_t cookie3 = xcb_intern_atom(connection, false, "UTF8_STRING");
 		if((reply = xcb_wait_for_reply(connection, cookie0.sequence, NULL))){
 			_NET_CLIENT_LIST = (*(xcb_intern_atom_reply_t *)reply).atom;
 			free(reply); reply = NULL;
@@ -207,6 +379,19 @@ int main(const int argumentAmount, const char *const *argument){
 		}else{
 			fprintf(stderr, "could not get _NET_CLIENT_LIST_STACKING atom\n");
 		}
+		if((reply = xcb_wait_for_reply(connection, cookie2.sequence, NULL))){
+			_NET_WM_NAME = (*(xcb_intern_atom_reply_t *)reply).atom;
+			free(reply); reply = NULL;
+		}else{
+			fprintf(stderr, "could not get _NET_WM_NAME atom\n");
+		}
+		if((reply = xcb_wait_for_reply(connection, cookie3.sequence, NULL))){
+			UTF8_STRING = (*(xcb_intern_atom_reply_t *)reply).atom;
+			free(reply); reply = NULL;
+		}else{
+			fprintf(stderr, "could not get UTF8_STRING atom\n");
+		}
+		#undef  xcb_intern_atom
 	}
 
 
@@ -216,15 +401,28 @@ int main(const int argumentAmount, const char *const *argument){
 
 
 
+
 	{
-		xcb_get_property_reply_t *prop_reply = xcb_get_property_reply(connection, xcb_get_property(connection, 0, (*screen).root, _NET_CLIENT_LIST, XCB_ATOM_WINDOW, 0, 1024), NULL);
+		xcb_get_property_reply_t *prop_reply = xcb_wait_for_reply(connection, xcb_get_property(connection, 0, (*screen).root, _NET_CLIENT_LIST, XCB_ATOM_WINDOW, 0, 1024).sequence, NULL);
 		if(prop_reply){
 			xcb_window_t *windows = xcb_get_property_value(prop_reply);
-			int num_windows = xcb_get_property_value_length(prop_reply) / sizeof(xcb_window_t);
+			int windowAmount = xcb_get_property_value_length(prop_reply) / sizeof(xcb_window_t);
 			int i = 0;
-			fprintf(stdout, "Number of windows: %d\n", num_windows);
-			while(i < num_windows){
-				fprintf(stdout, "Window %d: 0x%08x\n", i, windows[i]);
+			while(i < windowAmount){
+
+
+
+				xcb_get_property_reply_t *reply = xcb_wait_for_reply(connection, xcb_get_property(connection, 0, windows[i], _NET_WM_NAME, UTF8_STRING, 0, 1024).sequence, NULL);
+				fprintf(stdout, "Window %d: 0x%08x - ", i, windows[i]);
+				if(reply){
+					printf("\"%s\"\n", (char*)xcb_get_property_value(reply));
+					free(reply);
+				}else{
+					fprintf(stdout, "no reply\n");
+				}
+
+
+
 				inc i;
 			}
 			free(prop_reply);
@@ -233,6 +431,20 @@ int main(const int argumentAmount, const char *const *argument){
 			xcb_disconnect(connection);
 			ret 1;
 		}
+	}
+
+
+
+
+
+
+
+
+
+	jmp readConfig;
+	readConfig:{
+		toggle = true;
+		xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_1, 23, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
 	}
 
 
@@ -265,18 +477,105 @@ int main(const int argumentAmount, const char *const *argument){
 		jmp switchEvents;
 	}
 	switchEvents:{
-		fprintf(stdout, "%u\n", (*event0).response_type & ~128);
+		#undef  XCB_RANDR_SCREEN_CHANGE_NOTIFY
+		#define XCB_ONE /*------------------------*/ (1)
+		#define XCB_RANDR_SCREEN_CHANGE_NOTIFY /*-*/ (89)
+		printEvent();
+		switch (*event0).response_type & ~128 over
+			to XCB_NONE: /*-----------------------*/ jmp errorEvent;
+			to XCB_ONE: /*------------------------*/ jmp unexpectedEvent;
+			to XCB_KEY_PRESS: /*------------------*/ jmp keyPressEvent;
+			to XCB_KEY_RELEASE: /*----------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_BUTTON_PRESS: /*---------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_BUTTON_RELEASE: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_MOTION_NOTIFY: /*--------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_ENTER_NOTIFY: /*---------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_LEAVE_NOTIFY: /*---------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_FOCUS_IN: /*-------------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_FOCUS_OUT: /*------------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_KEYMAP_NOTIFY: /*--------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_EXPOSE: /*---------------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_GRAPHICS_EXPOSURE: /*----------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_NO_EXPOSURE: /*----------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_VISIBILITY_NOTIFY: /*----------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_CREATE_NOTIFY: /*--------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_DESTROY_NOTIFY: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_UNMAP_NOTIFY: /*---------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_MAP_NOTIFY: /*-----------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_MAP_REQUEST: /*----------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_REPARENT_NOTIFY: /*------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_CONFIGURE_NOTIFY: /*-----------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_CONFIGURE_REQUEST: /*----------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_GRAVITY_NOTIFY: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_RESIZE_REQUEST: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_CIRCULATE_NOTIFY: /*-----------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_CIRCULATE_REQUEST: /*----------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_PROPERTY_NOTIFY: /*------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_SELECTION_CLEAR: /*------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_SELECTION_REQUEST: /*----------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_SELECTION_NOTIFY: /*-----------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_COLORMAP_NOTIFY: /*------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_CLIENT_MESSAGE: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_MAPPING_NOTIFY: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_GE_GENERIC: /*-----------------*/ jmp unexpectedEvent;
+			to XCB_RANDR_SCREEN_CHANGE_NOTIFY: /*-*/ jmp screenChangeNotifyEvent;
+			off: /*-------------------------------*/ jmp unexpectedEvent;
+		end
+		#undef  XCB_RANDR_SCREEN_CHANGE_NOTIFY
+		#undef  XCB_ONE
+	}
+	errorEvent:{
+		xcb_generic_error_t *genericError = (void *)event0;
+		fprintf(stderr, "%s: %s error in %s operation with a minor of %u and sequence %u\n", programName, *(errorCodeName + ((*genericError).error_code > 17? 0 : (*genericError).error_code)), *(majorCodeName + ((*genericError).major_code > 127? 0 : (*genericError).major_code)), (*genericError).minor_code, (*genericError).sequence);
+		genericError = NULL;
 		jmp eventLoop;
 	}
+	keyPressEvent:{
 
 
 
+		/*!
+			update key press event
+		*/
 
 
 
+		const uint32 attribute = XCB_STACK_MODE_ABOVE;
+		Monitor *current = monitorStart;
+		Monitor *wall = monitorStart + monitorAmount;
+		xcb_void_cookie_t (*mapUnmap)(xcb_connection_t *, xcb_window_t);
+		if(mapped){
+			mapUnmap = xcb_unmap_window;
+			mapped = false;
+		}else{
+			mapUnmap = xcb_map_window;
+			mapped = true;
+		}
+		mapWindowLoop:{
+			xcb_configure_window(connection, (*current).window, XCB_CONFIG_WINDOW_STACK_MODE, &attribute);
+			mapUnmap(connection, (*current).window);
+			if(inc current < wall){
+				jmp mapWindowLoop;
+			}
+		}
+		jmp eventLoop;
+	}
+	screenChangeNotifyEvent:{
 
 
 
+		/*!
+			handle randr changes
+		*/
+
+
+
+		jmp eventLoop;
+	}
+	unexpectedEvent:{
+		printUnexpectedEvent();
+		jmp eventLoop;
+	}
 	eventLoopExit:
 	mainEmergencyExit:{
 		xcb_disconnect(connection); connection = NULL;
