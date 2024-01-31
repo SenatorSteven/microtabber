@@ -1,21 +1,21 @@
 /*!
-	implement monitor orderings:
-		use monitor distinction (y/n)
-			order monitors (somehow)
-
-	implement different orderings:
-		by time (use _NET_CLIENT_LIST)
-		by z-order (use _NET_CLIENT_LIST_STACKING)
+	order windows based on an x, y, or (x, y) order
 */
 
 /*!
-	look into what kind of data we would like from the windows
+	order windows based on a creation time order
 */
 
 /*!
-	look into the unlikely possibility that we can record whenever windows open and close (will speed execution up by god knows)
+	before anything more important, check if wm supports client list property. exit if it does not.
+*/
 
-	if the above is possible, do a sweep on program startup
+/*!
+	choose different font use https://github.com/TheSenatorSteven/microtabber/blob/main/source/microtabber.cold as reference for proper utf8 support
+*/
+
+/*!
+	use WM_NAME if _NET_WM_NAME does not exist for a given window
 */
 
 
@@ -51,547 +51,748 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 /*!includes:{*/
-	#include <stdarg.h>
+	#include <stdint.h>
+	#include "cold/cold.hold"
+	#include <signal.h>
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <string.h>
+	#include <unistd.h>
 	#include <xcb/randr.h>
 	#include <xcb/xcb.h>
-	#include <xcb/xcbext.h>
-	#include "cold/cold.hold"
+/*!}*/
+
+/*!user_defines:{*/
+	#define DefaultErrorStream /*---------*/ (stderr)
 /*!}*/
 
 /*!defines:{*/
-	#define DEBUG /*--------------------*/ (true)
+	#define DEBUG /*----------------------*/ (true)
 
-
-
-
-
-
-
-
-
-	/*!
-		move this cold.hold
-	*/
-	#define EMPTY_MACRO /*--------------*/
-
-
-
-
-
-
-
-
-
-	#define PRINTERROR_DEC /*-----------*/ local void printError(const char *const string)
-	#define PRINTPROPERERROR_DEC /*-----*/ local void printProperError(const char *const message, ...)
-	#define OPENERRORSTREAM_DEC /*------*/ local bool openErrorStream(void)
-	#define CLOSEERRORSTREAM_DEC /*-----*/ local void closeErrorStream(void)
-	#define PRINTCONNECTIONERROR_DEC /*-*/ local void printConnectionError(void)
+	#define _EMPTY_MACRO /*---------------*/
 
 	#if DEBUG
-		#define printEvent(void) /*-----------*/ (fprintf(stderr, "%s: event: %s\n", programName, *(eventName + (((*event0).response_type & ~128) > 35? 1 : (*event0).response_type & ~128))))
-		#define printUnexpectedEvent(void) /*-*/ (fprintf(stderr, "%s: unexpected event (%s), ignored\n", programName, *(eventName + (((*event0).response_type & ~128) > 35? 1 : (*event0).response_type & ~128))))
+		#define _PRINTEVENT_DEC /*-------------*/ local void printEvent(void)
+		#define _PRINTUNEXPECTEDEVENT_DEC /*---*/ local void printUnexpectedEvent(void)
+		#define _printEvent(void) /*-----------*/ (printEvent())
+		#define _printUnexpectedEvent(void) /*-*/ (printUnexpectedEvent())
 	#else
-		#define printEvent(void) /*-----------*/ EMPTY_MACRO
-		#define printUnexpectedEvent(void) /*-*/ EMPTY_MACRO
+		#define _PRINTEVENT_DEC /*-------------*/ def void dA
+		#define _PRINTUNEXPECTEDEVENT_DEC /*---*/ def void a2
+		#define _printEvent(void) /*-----------*/ _EMPTY_MACRO
+		#define _printUnexpectedEvent(void) /*-*/ _EMPTY_MACRO
 	#endif
-/*!}*/
 
-/*!defs:{*/
-	def struct{
-		uint /*---------*/ x;
-		uint /*---------*/ y;
-		uint /*---------*/ width;
-		uint /*---------*/ height;
-		xcb_window_t /*-*/ window;
-	} Monitor;
+	#define PRINTERROR_DEC /*-------------*/ local void printError(const char *const string)
+	#define OPENERRORSTREAM_DEC /*--------*/ local bool openErrorStream(void)
+	#define CLOSEERRORSTREAM_DEC /*-------*/ local void closeErrorStream(void)
+	#define PRINTCONNECTIONERROR_DEC /*---*/ local void printConnectionError(void)
+	#define REQUESTCHECK_DEC /*-----------*/ local void requestCheck(const xcb_void_cookie_t c, const char *const errorMessage, const uint8 errorCode)
+	#define PRINTEVENT_DEC /*-------------*/ _PRINTEVENT_DEC
+	#define PRINTXCBERROR_DEC /*----------*/ local void printXCBError(void)
+	#define PRINTUNEXPECTEDEVENT_DEC /*---*/ _PRINTUNEXPECTEDEVENT_DEC
+
+	#define printEvent(void) /*-----------*/ _printEvent()
+	#define printUnexpectedEvent(void) /*-*/ _printUnexpectedEvent()
 /*!}*/
 
 /*!globals:{*/
-	const char * /*----------*/ programName;
-	const char * /*----------*/ errorPath;
-	bool /*------------------*/ mustOpenErrorStream;
-	FILE * /*----------------*/ errorStream;
-	char * /*----------------*/ connectionName;
-	xcb_connection_t * /*----*/ connection;
-	xcb_screen_t * /*--------*/ screen;
-
-
-
-	uint8 /*-----------------*/ depth;
-	xcb_colormap_t /*--------*/ colormap;
-	xcb_visualid_t /*--------*/ visual;
-
-
-
-	uint /*------------------*/ monitorAmount;
-	Monitor * /*-------------*/ monitorStart;
-
-
-
-	xcb_atom_t /*------------*/ _NET_CLIENT_LIST;
-	xcb_atom_t /*------------*/ _NET_CLIENT_LIST_STACKING;
-	xcb_atom_t /*------------*/ _NET_WM_NAME;
-	xcb_atom_t /*------------*/ UTF8_STRING;
-	void * /*----------------*/ reply;
-
-
-
-	bool /*------------------*/ toggle;
-	bool /*------------------*/ mapped;
-
-
-
-	xcb_generic_event_t * /*-*/ event0;
-	xcb_generic_event_t * /*-*/ event1;
-
-	#if DEBUG
-		const char *const eventName[] = {"None", "Unrecognized", "KeyPress", "KeyRelease", "ButtonPress", "ButtonRelease", "MotionNotify", "EnterNotify", "LeaveNotify", "FocusIn", "FocusOut", "KeymapNotify", "Expose", "GraphicsExpose", "NoExpose", "VisibilityNotify", "CreateNotify", "DestroyNotify", "UnmapNotify", "MapNotify", "MapRequest", "ReparentNotify", "ConfigureNotify", "ConfigureRequest", "GravityNotify", "ResizeRequest", "CirculateNotify", "CirculateRequest", "PropertyNotify", "SelectionClear", "SelectionRequest", "SelectionNotify", "ColormapNotify", "ClientMessage", "MappingNotify", "GenericEvent"};
-	#endif
-	const char *const majorCodeName[] = {"unrecognized", "create window", "change window attributes", "get window attributes", "destroy window", "destroy subwindows", "change save set", "reparent window", "map window", "map subwindows", "unmap window", "unmap subwindows", "configure window", "circulate window", "get geometry", "query tree", "intern atom", "get atom name", "change property", "delete property", "get property", "list properties", "set selection owner", "get selection owner", "convert selection", "send event", "grab pointer", "ungrab pointer", "grab button", "ungrab button", "change active pointer grab", "grab keyboard", "ungrab keyboard", "grab key", "ungrab key", "allow events", "grab server", "ungrab server", "query pointer", "get motion events", "translate coordinates", "warp pointer", "set input focus", "get input focus", "query keymap", "open font", "close font", "query font", "query text extents", "list fonts", "list fonts with info", "set font path", "get font path", "create pixmap", "free pixmap", "create graphics context", "change graphics context", "copy graphics context", "set dashes", "set clip rectangles", "free graphics context", "clear area", "copy area", "copy plane", "poly point", "poly line", "poly segment", "poly rectangle", "poly arc", "fill poly", "poly fill rectangle", "poly fill arc", "put image", "get image", "poly text (8)", "poly text (16)", "image text (8)", "image text (16)", "create colormap", "free colormap", "copy colormap and free", "install colormap", "uninstall colormap", "list installed colormaps", "allocate color", "allocate named color", "allocate color cells", "allocate color planes", "free colors", "store colors", "store named color", "query colors", "lookup color", "create cursor", "create glyph cursor", "free cursor", "recolor cursor", "query best size", "query extension", "list extensions", "change keyboard mapping", "get keyboard mapping", "change keyboard control", "get keyboard control", "bell", "change pointer control", "get pointer control", "set screen saver", "get screen saver", "change hosts", "list hosts", "set access control", "set close down mode", "kill client", "rotate properties", "force screen saver", "set pointer mapping", "get pointer mapping", "set modifier mapping", "get modifier mapping", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "no"};
-	const char *const errorCodeName[] = {"unrecognized", "request", "value", "window", "pixmap", "atom", "cursor", "font", "match", "drawable", "access", "allocation", "colormap", "graphics context", "id choice", "name", "length", "implementation"};
+	#define xScreen /*-------*/ xcb_screen_t
+	#define xConnection /*---*/ xcb_connection_t
+	#define xGenericError /*-*/ xcb_generic_error_t
+	#define xVisual /*-------*/ xcb_visualid_t
+	#define xGC /*-----------*/ xcb_gcontext_t
+	#define xDepth /*--------*/ uint8
+	#define xGenericEvent /*-*/ xcb_generic_event_t
+	#define xWindow /*-------*/ xcb_window_t
+	#define xFont /*---------*/ xcb_font_t
+	const char * /*----*/ programName;
+	const char * /*----*/ errorPath;
+	const char * /*----*/ connectionName;
+	const xScreen * /*-*/ screen;
+	const char * /*----*/ quitMessage;
+	bool /*------------*/ mustOpenErrorStream;
+	FILE * /*----------*/ errorStream;
+	xConnection * /*---*/ connection;
+	xGenericError * /*-*/ genericError;
+	xGC /*-------------*/ gc;
+	xGenericEvent * /*-*/ event;
+	void * /*----------*/ agp0;
+	xWindow /*---------*/ window;
+	xFont /*-----------*/ font;
+	int /*-------------*/ x;
+	int /*-------------*/ y;
+	uint /*------------*/ width;
+	uint /*------------*/ height;
+	uint /*------------*/ fontX;
+	uint /*------------*/ fontY;
+	uint /*------------*/ fontWidth;
+	uint /*------------*/ fontHeight;
+	uint32 /*----------*/ foreground;
+	uint32 /*----------*/ background;
+	xcb_colormap_t /*--*/ colormap;
+	xVisual /*---------*/ visual;
+	xDepth /*----------*/ depth;
+	#undef  xWindow
+	#undef  xGenericEvent
+	#undef  xGC
+	#undef  xGenericError
+	#undef  xConnection
+	#undef  xScreen
 /*!}*/
 
 /*!functions:{*/
 	PRINTERROR_DEC;
-	PRINTPROPERERROR_DEC;
 	OPENERRORSTREAM_DEC;
 	CLOSEERRORSTREAM_DEC;
 	PRINTCONNECTIONERROR_DEC;
+	REQUESTCHECK_DEC;
+	PRINTEVENT_DEC;
+	PRINTXCBERROR_DEC;
+	PRINTUNEXPECTEDEVENT_DEC;
 /*!}*/
 
+#define LITERAL_LENGTH(l) /*-*/ (sizeof(l) - 1)
+#define SELF(self) /*--------*/ self
+#define ARRAY_SIZE(a) /*-----*/ (sizeof(a) / sizeof(*a))
+
+xcb_atom_t /*-*/ atomStart[5];
+
+const uint32 valueList = XCB_EVENT_MASK_PROPERTY_CHANGE;
+char **stringList;
+xcb_window_t *windowList;
+uint *desktopList;
+uint windowAmount;
+bool mapped = false;
+
+#define BOX_SIZE /*------------*/ (111)
+
+#define BACKING_BUFFER_SIZE /*-*/ (1000)
+
+uint32 *kernelColumnRStart;
+uint32 *kernelColumnGStart;
+uint32 *kernelColumnBStart;
+
+uint32 *pixelRStart;
+uint32 *pixelGStart;
+uint32 *pixelBStart;
+
+void doubleBoxBlur(const int width, const int height, uint32 *originalData, uint32 *intermediateData, uint32 *destinationData, const int boxSize);
+
+uint32 *intermediateData;
+uint32 *data;
+
+uint32 *frame;
+
+const uint32 stackMode = XCB_STACK_MODE_ABOVE;
+uint cutoffPoint = 29;
+uint currentWindow;
+bool startFromCurrentWindow = true;
+
+xcb_pixmap_t pixmap;
+
+xcb_client_message_event_t clientMessage;
+
+#define INVOKE_KEYCODE /*----------*/ (23)
+#define PREVIOUS_WINDOW_KEYCODE /*-*/ (113)
+#define NEXT_WINDOW_KEYCODE /*-----*/ (114)
+#define ABOVE_WINDOW_KEYCODE /*----*/ (111)
+#define BELOW_WINDOW_KEYCODE /*----*/ (116)
+
 int main(const int argumentAmount, const char *const *argument){
-	jmp setGlobals;
-	setGlobals:{
+	(void)argumentAmount;
+	jmp main;
+	main:{
+		foreground = 0xFFE5E5E3;
+		background = 0xFF292929;
+
+		x      = 1920 / 8 * 1 + 1920;
+		y      = 1080 / 8 * 1;
+		width  = 1920 / 4 * 3;
+		height = 1080 / 4 * 3;
+
+		frame = malloc(width * height * sizeof(uint32));
+		jmp setPrimaryGlobals;
+	}
+	setPrimaryGlobals:{
 		programName /*---------*/ = *argument;
 		errorPath /*-----------*/ = NULL;
-		mustOpenErrorStream /*-*/ = false;
 		connectionName /*------*/ = NULL;
+		mustOpenErrorStream /*-*/ = false;
+		errorStream /*---------*/ = DefaultErrorStream;
 		connection /*----------*/ = NULL;
-		screen /*--------------*/ = NULL;
-		monitorStart /*--------*/ = NULL;
-		reply /*---------------*/ = NULL;
-		event0 /*--------------*/ = NULL;
-		event1 /*--------------*/ = NULL;
-		mapped /*--------------*/ = false;
-		jmp getProgramArguments;
-	}
-	getProgramArguments:{
-		if(argumentAmount > 1){
-			fprintf(stderr, "%s: usage: %s\n", programName, programName);
-			ret 1;
-		}
+		genericError /*--------*/ = NULL;
+		event /*---------------*/ = NULL;
+		agp0 /*----------------*/ = NULL;
+		quitMessage /*---------*/ = NULL;
 		jmp establishServerConnection;
 	}
 	establishServerConnection:{
-		int screenNumber = 0;
-		connection = xcb_connect_to_display_with_auth_info(connectionName, NULL, &screenNumber);
-		screen = xcb_setup_roots_iterator(xcb_get_setup(connection)).data + screenNumber;
+		#define ESTABLISHSERVERCONNECTION_CONNECTION /*-----*/ connection
+		#define ESTABLISHSERVERCONNECTION_CONNECTIONNAME /*-*/ connectionName
+		#define ESTABLISHSERVERCONNECTION_SCREEN /*---------*/ screen
+		#include "xcb/establishServerConnection.hold"
 		switch xcb_connection_has_error(connection) over
-			to XCB_NONE: /*------------*/ /*-----------------------------------------------------------------*/ jmp setupScreenProfile;
+			to XCB_NONE: /*------------*/ /*-----------------------------------------------------------------*/ jmp generateIDs;
 			to XCB_CONN_CLOSED_PARSE_ERR: printError(connectionName? "invalid server name" : "no server name"); jmp mainEmergencyExit;
 			off: /*--------------------*/ printConnectionError(); /*-----------------------------------------*/ jmp mainEmergencyExit;
 		end
 	}
+	generateIDs:{
+		font /*-----*/ = xcb_generate_id(connection);
+		gc /*-------*/ = xcb_generate_id(connection);
+		window /*---*/ = xcb_generate_id(connection);
+		colormap /*-*/ = xcb_generate_id(connection);
+		pixmap /*---*/ = xcb_generate_id(connection);
+		jmp setupScreenProfile;
+	}
 	setupScreenProfile:{
-		xcb_depth_iterator_t depthIterator = xcb_screen_allowed_depths_iterator(screen);
-		xcb_visualtype_iterator_t visualIterator;
-		visual = (*screen).root_visual;
-		depth = (*screen).root_depth;
-		findDepth:{
-			if((*depthIterator.data).depth == 32){
-				visualIterator = xcb_depth_visuals_iterator(depthIterator.data);
-				jmp findVisual;
-			}
-			if(depthIterator.rem){
-				xcb_depth_next(&depthIterator);
-				jmp findDepth;
-			}
-			printError("could not find a 32-bit depth visual, using default screen visual instead");
-			jmp setupColormap;
-		}
-		findVisual:{
-			if((*visualIterator.data)._class == XCB_VISUAL_CLASS_TRUE_COLOR){
-				visual = (*visualIterator.data).visual_id;
-				depth = (*depthIterator.data).depth;
-				jmp setupColormap;
-			}
-			if(visualIterator.rem){
-				dec visualIterator.rem;
-				inc visualIterator.data;
-				jmp findVisual;
-			}
-			printError("could not find a 32-bit depth visual (depth doesn't match the visual), using default screen visual instead");
-			jmp setupColormap;
-		}
+		#define SETUPSCREENPROFILE_VISUAL /*-*/ visual
+		#define SETUPSCREENPROFILE_DEPTH /*--*/ depth
+		#include "xcb/setupScreenProfile.hold"
+		jmp createWindow;
 	}
-	setupColormap:{
-
-
-
-		/*!
-			error checking
-		*/
-
-
-
-		colormap = xcb_generate_id(connection);
-		xcb_create_colormap(connection, XCB_COLORMAP_ALLOC_NONE, colormap, (*screen).root, visual);
-		xcb_randr_select_input_checked(connection, (*screen).root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
-		jmp setupMonitors;
-	}
-	setupMonitors:{
+	createWindow:{
+		#define FONT /*-*/ "-misc-fixed-medium-r-normal--20-200-75-75-c-100-iso10646-1"
 		struct{
-			uint32 backgroundColor;
-			uint32 borderColor;
-			uint32 overrideRedirect;
-			xcb_colormap_t colormap;
+			uint32 /*---------*/ backgroundColor;
+			uint32 /*---------*/ borderColor;
+			bool /*-----------*/ overrideRedirect;
+			uint32 /*---------*/ eventMask;
+			xcb_colormap_t /*-*/ colormap;
 		} attribute;
-		attribute.backgroundColor = 0xFFFFFFFF;
-		attribute.borderColor = 0xFFFFFFFF;
-		attribute.overrideRedirect = true;
-		attribute.colormap = colormap;
-		/*!
-			rewrite this to be sure and for more speed (cookies)
-		*/
-		if(!(reply = xcb_wait_for_reply(connection, xcb_randr_get_monitors(connection, (*screen).root, false).sequence, NULL))){
-			printError("could not get number of monitors");
-			monitorAmount = 1;
-		}else{
-			monitorAmount = (*(xcb_randr_get_monitors_reply_t *)reply).nMonitors;
-			free(reply); reply = NULL;
-		}
-		/*!
-			error check
-		*/
-		monitorStart = realloc(NULL, monitorAmount * sizeof(Monitor));
-		fprintf(stdout, "number of            monitors: %u\n", monitorAmount);
-
-
-
-
-
-
-
-
-
-		/*!
-			two monitors but same output: should weed these out. you can check x, y equality.
-		*/
-		/*!
-			rewrite this to be sure and for more speed (focus on the cookies)
-		*/
+		requestCheck(xcb_create_colormap_checked(connection, XCB_COLORMAP_ALLOC_NONE, colormap, (*screen).root, visual), "could not create colormap", XCB_NONE);
+		attribute.backgroundColor /*--*/ = 0xFFFFFFFF;
+		attribute.borderColor /*------*/ = 0x00000000;
+		attribute.overrideRedirect /*-*/ = true;
+		attribute.eventMask /*--------*/ = XCB_EVENT_MASK_EXPOSURE;
+		attribute.colormap /*---------*/ = colormap;
+		requestCheck(xcb_create_window_checked(connection, depth, window, (*screen).root, x, y, width, height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP, &attribute.backgroundColor), "could not create window", XCB_NONE);
 		{
-			void *agp0;
-			void *agp1;
-			if(!(agp0 = xcb_wait_for_reply(connection, xcb_randr_get_screen_resources_current(connection, (*screen).root).sequence, NULL))){
-				fprintf(stdout, "%s: could not get screen resources\n", programName);
-			}else{
-				const xcb_randr_output_t *outputCurrent = xcb_randr_get_screen_resources_current_outputs(agp0);
-				xcb_randr_crtc_t crtc;
-				Monitor *monitorCurrent = monitorStart;
-				const xcb_randr_output_t *outputWall = outputCurrent + monitorAmount;
-				storeMonitorData:{
-					if(!(agp1 = xcb_wait_for_reply(connection, xcb_randr_get_output_info(connection, *outputCurrent, XCB_CURRENT_TIME).sequence, NULL))){
-						fprintf(stdout, "%s: could not get output info\n", programName);
-						jmp storeMonitorDataLoopControl;
-					}
-					crtc = (*(xcb_randr_get_output_info_reply_t *)agp1).crtc;
-					free(agp1); agp1 = NULL;
-					if(crtc == XCB_NONE){
-						jmp storeMonitorDataLoopControl;
-					}
-					if(!(agp1 = xcb_wait_for_reply(connection, xcb_randr_get_crtc_info(connection, crtc, XCB_CURRENT_TIME).sequence, NULL))){
-						fprintf(stdout, "%s: could not get crtc info\n", programName);
-						jmp storeMonitorDataLoopControl;
-					}
-					(*monitorCurrent).x = (*(xcb_randr_get_crtc_info_reply_t *)agp1).x;
-					(*monitorCurrent).y = (*(xcb_randr_get_crtc_info_reply_t *)agp1).y;
-					{
-						Monitor *m = monitorStart;
-						loop:{
-							if(m < monitorCurrent){
-								if((*m).x == (*monitorCurrent).x and (*m).y == (*monitorCurrent).y){
-									dec monitorAmount;
-									free(agp1); agp1 = NULL;
-									jmp storeMonitorDataLoopControl;
-								}
-								inc m;
-								jmp loop;
-							}
-						}
-					}
-					(*monitorCurrent).width  = (*(xcb_randr_get_crtc_info_reply_t *)agp1).width;
-					(*monitorCurrent).height = (*(xcb_randr_get_crtc_info_reply_t *)agp1).height;
-					{
-						const xcb_window_t window = xcb_generate_id(connection);
-						xcb_create_window(connection, depth, window, (*screen).root, (*monitorCurrent).x + (*monitorCurrent).width / 4, (*monitorCurrent).y + (*monitorCurrent).height / 4, (*monitorCurrent).width / 2, (*monitorCurrent).height / 2, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_COLORMAP, &attribute.backgroundColor);
-						(*monitorCurrent).window = window;
-					}
-					inc monitorCurrent;
-					free(agp1); agp1 = NULL;
-					storeMonitorDataLoopControl:{
-						if(inc outputCurrent < outputWall){
-							jmp storeMonitorData;
-						}
-					}
-				}
-				free(agp0); agp0 = NULL;
+			uint32 gcData[3];
+			requestCheck(xcb_open_font_checked(connection, font, LITERAL_LENGTH(FONT), FONT), "could not open font", XCB_NONE);
+			*(gcData + 0) = foreground;
+			*(gcData + 1) = background;
+			*(gcData + 2) = font;
+			requestCheck(xcb_create_gc_checked(connection, gc, window, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_FONT, gcData), "could not create graphics context", XCB_NONE);
+		}
+		xcb_create_pixmap(connection, depth, pixmap, (*screen).root, width, height);
+		jmp acquireFontMetrics;
+		#undef  FONT
+	}
+	acquireFontMetrics:{
+		xcb_query_font_reply_t *reply = xcb_query_font_reply(connection, xcb_query_font(connection, font), NULL);
+		if(reply){
+			fontX      = (*reply).min_bounds.left_side_bearing;
+			fontY      = (*reply).font_ascent;
+			fontWidth  = (*reply).max_bounds.right_side_bearing - (*reply).min_bounds.left_side_bearing;
+			fontHeight = (*reply).max_bounds.ascent + (*reply).max_bounds.descent;
+			free(reply);
+			reply = NULL;
+		}
+		jmp expressErrors;
+	}
+	expressErrors:{
+		#define STRINGS(f) /*-*/ { \
+			  f("_NET_CLIENT_LIST") \
+			, f("_NET_WM_NAME") \
+			, f("UTF8_STRING") \
+			, f("_NET_WM_DESKTOP") \
+			, f("_NET_CURRENT_DESKTOP") \
+		}
+		const char *const atomNameStart[] = STRINGS(SELF);
+		const char *const *atomNameCurrent = atomNameStart;
+		const uint atomNameSizeStart[] = STRINGS(LITERAL_LENGTH);
+		const uint *atomNameSizeCurrent = atomNameSizeStart;
+		xcb_intern_atom_cookie_t cookieStart[ARRAY_SIZE(atomNameStart)];
+		xcb_intern_atom_cookie_t *cookieCurrent = cookieStart;
+		const xcb_intern_atom_cookie_t *const cookieWall = cookieStart + ARRAY_SIZE(cookieStart);
+		xcb_intern_atom_reply_t *reply;
+		xcb_atom_t *atomCurrent = atomStart;
+
+
+
+		{
+			const uint32 valueList = XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE;
+			xcb_change_window_attributes(connection, (*screen).root, XCB_CW_EVENT_MASK, &valueList);
+		}
+		xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_4, INVOKE_KEYCODE, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+		xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_4, PREVIOUS_WINDOW_KEYCODE, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+		xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_4, NEXT_WINDOW_KEYCODE, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+		/*! xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_4, ABOVE_WINDOW_KEYCODE, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+		xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_4, BELOW_WINDOW_KEYCODE, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC); */
+
+
+
+		requestAtomsLoop:{
+			*cookieCurrent = xcb_intern_atom_unchecked(connection, false, *atomNameSizeCurrent, *atomNameCurrent);
+			if(inc cookieCurrent < cookieWall){
+				inc atomNameSizeCurrent;
+				inc atomNameCurrent;
+				jmp requestAtomsLoop;
 			}
+			cookieCurrent = cookieStart;
+			jmp replyAtomsLoop;
 		}
-		/*!
-			error check
-		*/
-		monitorStart = realloc(monitorStart, monitorAmount * sizeof(Monitor));
-		fprintf(stdout, "number of meaningful monitors: %u\n", monitorAmount);
-
-
-
-		{
-			uint32 event_mask = XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY;
-			xcb_change_window_attributes(connection, (*screen).root, XCB_CW_EVENT_MASK, &event_mask);
+		replyAtomsLoop:{
+			if((reply = xcb_intern_atom_reply(connection, *cookieCurrent, NULL))){
+				*atomCurrent = (*reply).atom;
+				free(reply);
+			}
+			if(inc cookieCurrent < cookieWall){
+				inc atomCurrent;
+				jmp replyAtomsLoop;
+			}
+			cookieCurrent = cookieStart;
 		}
-
-
-
-
-
-
-		jmp getAtoms;
 	}
-	getAtoms:{
-		#define xcb_intern_atom(a, b, c) /*-*/ xcb_intern_atom(a, b, sizeof(c) - 1, c)
-		xcb_intern_atom_cookie_t cookie0 = xcb_intern_atom(connection, false, "_NET_CLIENT_LIST");
-		xcb_intern_atom_cookie_t cookie1 = xcb_intern_atom(connection, false, "_NET_CLIENT_LIST_STACKING");
-		xcb_intern_atom_cookie_t cookie2 = xcb_intern_atom(connection, false, "_NET_WM_NAME");
-		xcb_intern_atom_cookie_t cookie3 = xcb_intern_atom(connection, false, "UTF8_STRING");
-		if((reply = xcb_wait_for_reply(connection, cookie0.sequence, NULL))){
-			_NET_CLIENT_LIST = (*(xcb_intern_atom_reply_t *)reply).atom;
-			free(reply); reply = NULL;
-		}else{
-			fprintf(stderr, "could not get _NET_CLIENT_LIST atom\n");
-		}
-		if((reply = xcb_wait_for_reply(connection, cookie1.sequence, NULL))){
-			_NET_CLIENT_LIST_STACKING = (*(xcb_intern_atom_reply_t *)reply).atom;
-			free(reply); reply = NULL;
-		}else{
-			fprintf(stderr, "could not get _NET_CLIENT_LIST_STACKING atom\n");
-		}
-		if((reply = xcb_wait_for_reply(connection, cookie2.sequence, NULL))){
-			_NET_WM_NAME = (*(xcb_intern_atom_reply_t *)reply).atom;
-			free(reply); reply = NULL;
-		}else{
-			fprintf(stderr, "could not get _NET_WM_NAME atom\n");
-		}
-		if((reply = xcb_wait_for_reply(connection, cookie3.sequence, NULL))){
-			UTF8_STRING = (*(xcb_intern_atom_reply_t *)reply).atom;
-			free(reply); reply = NULL;
-		}else{
-			fprintf(stderr, "could not get UTF8_STRING atom\n");
-		}
-		#undef  xcb_intern_atom
-	}
-
-
-
-
-
-
-
-
-
 	{
-		xcb_get_property_reply_t *prop_reply = xcb_wait_for_reply(connection, xcb_get_property(connection, 0, (*screen).root, _NET_CLIENT_LIST, XCB_ATOM_WINDOW, 0, 1024).sequence, NULL);
-		if(prop_reply){
-			xcb_window_t *windows = xcb_get_property_value(prop_reply);
-			int windowAmount = xcb_get_property_value_length(prop_reply) / sizeof(xcb_window_t);
-			int i = 0;
-			while(i < windowAmount){
-
-
-
-				xcb_get_property_reply_t *reply = xcb_wait_for_reply(connection, xcb_get_property(connection, 0, windows[i], _NET_WM_NAME, UTF8_STRING, 0, 1024).sequence, NULL);
-				fprintf(stdout, "Window %d: 0x%08x - ", i, windows[i]);
-				if(reply){
-					printf("\"%s\"\n", (char*)xcb_get_property_value(reply));
-					free(reply);
+		xcb_get_property_reply_t *reply = xcb_get_property_reply(connection, xcb_get_property(connection, false, (*screen).root, *atomStart, XCB_ATOM_WINDOW, 0, 1024), NULL);
+		if(reply){
+			xcb_window_t *windows = xcb_get_property_value(reply);
+			uint i;
+			windowAmount = xcb_get_property_value_length(reply) / sizeof(xcb_window_t);
+			stringList = malloc(windowAmount * sizeof(char *));
+			windowList = malloc(windowAmount * sizeof(xcb_window_t));
+			desktopList = malloc(windowAmount * sizeof(uint));
+			for(i = 0; i < windowAmount; inc i){
+				xcb_get_property_reply_t *reply1 = xcb_get_property_reply(connection, xcb_get_property(connection, false, windows[i], *(atomStart + 1), *(atomStart + 2), 0, 1024), NULL);
+				if(reply1){
+					char *result;
+					uint size = xcb_get_property_value_length(reply1);
+					bool flag = false;
+					if(size + 3 > cutoffPoint){
+						size = cutoffPoint;
+						flag = true;
+					}
+					result = malloc(size + 1);
+					memcpy(result, xcb_get_property_value(reply1), size);
+					if(flag){
+						result[size + 0] = '.';
+						result[size + 1] = '.';
+						result[size + 2] = '.';
+						result[size + 3] = '\0';
+					}else{
+						result[size] = '\0';
+					}
+					stringList[i] = result;
+					free(reply1);
 				}else{
-					fprintf(stdout, "no reply\n");
+					char *const result = malloc(1 + 1);
+					result[0] = '-';
+					result[1] = '\0';
+					stringList[i] = result;
 				}
-
-
-
-				inc i;
+				windowList[i] = windows[i];
+				reply1 = xcb_get_property_reply(connection, xcb_get_property(connection, false, windows[i], *(atomStart + 3), XCB_ATOM_CARDINAL, 0, 1), NULL);
+				if(reply1){
+					desktopList[i] = *(uint32 *)xcb_get_property_value(reply1);
+					free(reply1);
+				}else{
+					desktopList[i] = -1;
+				}
+				xcb_change_window_attributes(connection, windows[i], XCB_CW_EVENT_MASK, &valueList);
 			}
-			free(prop_reply);
-		}else{
-			fprintf(stderr, "Failed to retrieve property values\n");
-			xcb_disconnect(connection);
-			ret 1;
+			free(reply);
 		}
+		jmp dealWithSynthetic;
 	}
-
-
-
-
-
-
-
-
-
-	jmp readConfig;
-	readConfig:{
-		toggle = true;
-		xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_1, 23, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+	dealWithSynthetic:{
+		clientMessage.response_type = XCB_CLIENT_MESSAGE;
+		clientMessage.format = 32;
+		clientMessage.window = (*screen).root;
+		clientMessage.type = *(atomStart + 4);
+		clientMessage.data.data32[1] = XCB_CURRENT_TIME;
+		clientMessage.data.data32[2] = 0;
+		clientMessage.data.data32[3] = 0;
+		clientMessage.data.data32[4] = 0;
+		jmp eventLoop;
 	}
-
-
-
-
-
-
-
-
-
 	eventLoop:{
 		xcb_flush(connection);
-		free(event0);
-		if(event1){
-			event0 = event1;
-			event1 = NULL;
-			jmp switchEvents;
-		}
-		event0 = NULL;
-		jmp waitForEvent;
+		free(event);
+		event = NULL;
+		jmp waitForEventLoop;
 	}
-	waitForEvent:{
-		if((event0 = xcb_wait_for_event(connection))){
+	waitForEventLoop:{
+		if((event = xcb_wait_for_event(connection))){
 			jmp switchEvents;
 		}
 		if(xcb_connection_has_error(connection)){
 			printConnectionError();
 			jmp eventLoopExit;
 		}
-		jmp switchEvents;
+		jmp waitForEventLoop;
 	}
 	switchEvents:{
 		#undef  XCB_RANDR_SCREEN_CHANGE_NOTIFY
 		#define XCB_ONE /*------------------------*/ (1)
 		#define XCB_RANDR_SCREEN_CHANGE_NOTIFY /*-*/ (89)
 		printEvent();
-		switch (*event0).response_type & ~128 over
+		switch (*event).response_type & ~0x80 over
 			to XCB_NONE: /*-----------------------*/ jmp errorEvent;
 			to XCB_ONE: /*------------------------*/ jmp unexpectedEvent;
 			to XCB_KEY_PRESS: /*------------------*/ jmp keyPressEvent;
-			to XCB_KEY_RELEASE: /*----------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_BUTTON_PRESS: /*---------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_BUTTON_RELEASE: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_MOTION_NOTIFY: /*--------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_ENTER_NOTIFY: /*---------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_LEAVE_NOTIFY: /*---------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_FOCUS_IN: /*-------------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_FOCUS_OUT: /*------------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_KEYMAP_NOTIFY: /*--------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_EXPOSE: /*---------------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_GRAPHICS_EXPOSURE: /*----------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_NO_EXPOSURE: /*----------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_VISIBILITY_NOTIFY: /*----------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_CREATE_NOTIFY: /*--------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_DESTROY_NOTIFY: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_UNMAP_NOTIFY: /*---------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_MAP_NOTIFY: /*-----------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_MAP_REQUEST: /*----------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_REPARENT_NOTIFY: /*------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_CONFIGURE_NOTIFY: /*-----------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_CONFIGURE_REQUEST: /*----------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_GRAVITY_NOTIFY: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_RESIZE_REQUEST: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_CIRCULATE_NOTIFY: /*-----------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_CIRCULATE_REQUEST: /*----------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_PROPERTY_NOTIFY: /*------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_SELECTION_CLEAR: /*------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_SELECTION_REQUEST: /*----------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_SELECTION_NOTIFY: /*-----------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_COLORMAP_NOTIFY: /*------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_CLIENT_MESSAGE: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_MAPPING_NOTIFY: /*-------------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_KEY_RELEASE: /*----------------*/ jmp keyReleaseEvent;
+			to XCB_BUTTON_PRESS: /*---------------*/ jmp unexpectedEvent;
+			to XCB_BUTTON_RELEASE: /*-------------*/ jmp unexpectedEvent;
+			to XCB_MOTION_NOTIFY: /*--------------*/ jmp unexpectedEvent;
+			to XCB_ENTER_NOTIFY: /*---------------*/ jmp unexpectedEvent;
+			to XCB_LEAVE_NOTIFY: /*---------------*/ jmp unexpectedEvent;
+			to XCB_FOCUS_IN: /*-------------------*/ jmp unexpectedEvent;
+			to XCB_FOCUS_OUT: /*------------------*/ jmp unexpectedEvent;
+			to XCB_KEYMAP_NOTIFY: /*--------------*/ jmp unexpectedEvent;
+			to XCB_EXPOSE: /*---------------------*/ jmp exposeEvent;
+			to XCB_GRAPHICS_EXPOSURE: /*----------*/ jmp unexpectedEvent;
+			to XCB_NO_EXPOSURE: /*----------------*/ jmp eventLoop;
+			to XCB_VISIBILITY_NOTIFY: /*----------*/ jmp unexpectedEvent;
+			to XCB_CREATE_NOTIFY: /*--------------*/ jmp eventLoop;
+			to XCB_DESTROY_NOTIFY: /*-------------*/ jmp eventLoop;
+			to XCB_UNMAP_NOTIFY: /*---------------*/ jmp unmapNotify;
+			to XCB_MAP_NOTIFY: /*-----------------*/ jmp eventLoop;
+			to XCB_MAP_REQUEST: /*----------------*/ jmp unexpectedEvent;
+			to XCB_REPARENT_NOTIFY: /*------------*/ jmp eventLoop;
+			to XCB_CONFIGURE_NOTIFY: /*-----------*/ jmp eventLoop;
+			to XCB_CONFIGURE_REQUEST: /*----------*/ jmp unexpectedEvent;
+			to XCB_GRAVITY_NOTIFY: /*-------------*/ jmp unexpectedEvent;
+			to XCB_RESIZE_REQUEST: /*-------------*/ jmp unexpectedEvent;
+			to XCB_CIRCULATE_NOTIFY: /*-----------*/ jmp unexpectedEvent;
+			to XCB_CIRCULATE_REQUEST: /*----------*/ jmp unexpectedEvent;
+			to XCB_PROPERTY_NOTIFY: /*------------*/ jmp propertyNotifyEvent;
+			to XCB_SELECTION_CLEAR: /*------------*/ jmp unexpectedEvent;
+			to XCB_SELECTION_REQUEST: /*----------*/ jmp unexpectedEvent;
+			to XCB_SELECTION_NOTIFY: /*-----------*/ jmp unexpectedEvent;
+			to XCB_COLORMAP_NOTIFY: /*------------*/ jmp unexpectedEvent;
+			to XCB_CLIENT_MESSAGE: /*-------------*/ jmp clientMessage;
+			to XCB_MAPPING_NOTIFY: /*-------------*/ jmp eventLoop;
 			to XCB_GE_GENERIC: /*-----------------*/ jmp unexpectedEvent;
-			to XCB_RANDR_SCREEN_CHANGE_NOTIFY: /*-*/ jmp screenChangeNotifyEvent;
+			to XCB_RANDR_SCREEN_CHANGE_NOTIFY: /*-*/ jmp unexpectedEvent;
 			off: /*-------------------------------*/ jmp unexpectedEvent;
 		end
 		#undef  XCB_RANDR_SCREEN_CHANGE_NOTIFY
 		#undef  XCB_ONE
 	}
-	errorEvent:{
-		xcb_generic_error_t *genericError = (void *)event0;
-		fprintf(stderr, "%s: %s error in %s operation with a minor of %u and sequence %u\n", programName, *(errorCodeName + ((*genericError).error_code > 17? 0 : (*genericError).error_code)), *(majorCodeName + ((*genericError).major_code > 127? 0 : (*genericError).major_code)), (*genericError).minor_code, (*genericError).sequence);
-		genericError = NULL;
+	keyPressEvent:{
+		if((*(xcb_key_press_event_t *)event).detail == INVOKE_KEYCODE and !mapped){
+			if(startFromCurrentWindow){
+
+
+
+				/*! ask root window which window is focused and calculate which value that windows corresponds to */
+
+
+
+				currentWindow = 0;
+
+
+
+			}else{
+				currentWindow = 0;
+			}
+			xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_STACK_MODE, &stackMode);
+			xcb_map_window(connection, window);
+			mapped = true;
+			jmp eventLoop;
+		}
+		if((*(xcb_key_press_event_t *)event).detail == NEXT_WINDOW_KEYCODE and mapped){
+
+
+
+			if(currentWindow < windowAmount){
+				inc currentWindow;
+			}
+
+
+
+			jmp exposeEvent;
+		}
+		if((*(xcb_key_press_event_t *)event).detail == PREVIOUS_WINDOW_KEYCODE and mapped){
+
+
+
+			if(currentWindow > 1){
+				dec currentWindow;
+			}elif(!currentWindow){
+				currentWindow = windowAmount;
+			}
+
+
+
+			jmp exposeEvent;
+		}
 		jmp eventLoop;
 	}
-	keyPressEvent:{
-
-
-
-		/*!
-			update key press event
-		*/
-
-
-
-		const uint32 attribute = XCB_STACK_MODE_ABOVE;
-		Monitor *current = monitorStart;
-		Monitor *wall = monitorStart + monitorAmount;
-		xcb_void_cookie_t (*mapUnmap)(xcb_connection_t *, xcb_window_t);
-		if(mapped){
-			mapUnmap = xcb_unmap_window;
-			mapped = false;
-		}else{
-			mapUnmap = xcb_map_window;
-			mapped = true;
-		}
-		mapWindowLoop:{
-			xcb_configure_window(connection, (*current).window, XCB_CONFIG_WINDOW_STACK_MODE, &attribute);
-			mapUnmap(connection, (*current).window);
-			if(inc current < wall){
-				jmp mapWindowLoop;
+	keyReleaseEvent:{
+		if((*(xcb_key_release_event_t *)event).detail == INVOKE_KEYCODE and mapped){
+			xcb_query_keymap_reply_t *reply = xcb_query_keymap_reply(connection, xcb_query_keymap(connection), NULL);
+			if(reply){
+				const uint64 *list = (void *)(*reply).keys;
+				uint key = INVOKE_KEYCODE;
+				while(key >= 64){
+					key -= 64;
+					inc list;
+				}
+				if(!(*list >> key)){
+					xcb_unmap_window(connection, window);
+					mapped = false;
+					if(currentWindow){
+						clientMessage.sequence = xcb_no_operation(connection).sequence;
+						*clientMessage.data.data32 = *(desktopList + currentWindow - 1);
+						xcb_send_event(connection, false, (*screen).root, XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (void *)&clientMessage);
+					}
+				}
+				free(reply);
 			}
 		}
 		jmp eventLoop;
 	}
-	screenChangeNotifyEvent:{
+	exposeEvent:{
+		uint eachWindowWidth = 320;
+		uint eachWindowHeight = eachWindowWidth * 9 / 16;
+		uint spacing = 30;
+		{
+			uint x;
+			uint y;
+			for(x = 0; x < width; inc x){
+				for(y = 0; y < height; inc y){
+					*(frame + y * width + x) = foreground;
+				}
+			}
+		}
+		{
+			uint x = 0;
+			uint endingX;
+			uint startingY = spacing;
+			uint endingY = spacing + eachWindowHeight;
+			uint y;
+			uint i;
+			uint32 defaultColor = 0xFFFFFF00;
+			uint32 popOutColor = 0xFFFF0000;
+			uint32 color;
+			for(i = 0; i < windowAmount; inc i){
+				if(i + 1 == currentWindow){
+					color = popOutColor;
+				}else{
+					color = defaultColor;
+				}
+				endingX = x + spacing;
+				for(; x < endingX; inc x){
+					for(y = startingY; y < endingY; inc y){
+						if(x < width and y < height){
+						}
+					}
+				}
+				endingX = x + eachWindowWidth;
+				for(; x < endingX; inc x){
+					for(y = startingY; y < endingY; inc y){
+						if(x < width and y < height){
+							*(frame + y * width + x) = color;
+						}
+					}
+				}
+				if(endingX + spacing + eachWindowWidth >= width){
+					x = 0;
+					startingY += spacing + eachWindowHeight + fontHeight;
+					endingY   += spacing + eachWindowHeight + fontHeight;
+				}
+			}
+			depth = 32;
+			xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, pixmap, gc, width, height, 0, 0, 0, depth, width * height * 4, (void *)frame);
+		}
+		{
+			uint x = 0;
+			uint endingX;
+			uint startingY = spacing;
+			uint endingY = spacing + eachWindowHeight;
+			uint y;
+			uint i;
+			for(i = 0; i < windowAmount; inc i){
+				endingX = x + spacing;
+				x = endingX;
+				endingX = x + eachWindowWidth;
+				xcb_image_text_8(connection, strlen(*(stringList + i)), pixmap, gc, x, endingY + fontHeight, *(stringList + i));
+				for(; x < endingX; inc x){
+					for(y = startingY; y < endingY; inc y){
+						if(x < width and y < height){
+						}
+					}
+				}
+				if(endingX + spacing + eachWindowWidth >= width){
+					x = 0;
+					startingY += spacing + eachWindowHeight + fontHeight;
+					endingY   += spacing + eachWindowHeight + fontHeight;
+				}
+			}
+		}
+		xcb_copy_area(connection, pixmap, window, gc, 0, 0, 0, 0, width, height);
+		jmp eventLoop;
+	}
+	unmapNotify:{
+		if((*(xcb_unmap_notify_event_t *)event).window == window){
+			mapped = false;
+		}
+		jmp eventLoop;
+	}
+	propertyNotifyEvent:{
+		if((*(xcb_property_notify_event_t *)event).atom == *atomStart){
+			jmp eventLoop;
+		}
+		if((*(xcb_property_notify_event_t *)event).window == (*screen).root){
+			xcb_get_property_reply_t *reply = xcb_get_property_reply(connection, xcb_get_property(connection, false, (*screen).root, *atomStart, XCB_ATOM_WINDOW, 0, 1024), NULL);
+			if(reply){
+
+				/*! update this lmao */
+
+				const uint32 valueList = XCB_EVENT_MASK_PROPERTY_CHANGE;
+				const uint newWindowAmount = xcb_get_property_value_length(reply) / sizeof(xcb_window_t);
+				xcb_window_t *tempWindowPointer;
+				char **tempStringPointer;
+				uint *tempDesktopPointer;
+				uint i;
+				xcb_window_t *windows = xcb_get_property_value(reply);
 
 
 
-		/*!
-			handle randr changes
-		*/
+				for(i = 0; i < windowAmount; inc i){
+					free(stringList[i]);
+				}
 
 
 
+				if(newWindowAmount > windowAmount){
+					tempWindowPointer = realloc(windowList, newWindowAmount * sizeof(xcb_window_t));
+					tempStringPointer = realloc(stringList, newWindowAmount * sizeof(char *));
+					tempDesktopPointer = realloc(desktopList, newWindowAmount * sizeof(uint));
+					stringList = tempStringPointer;
+					windowList = tempWindowPointer;
+					desktopList = tempDesktopPointer;
+				}
+
+
+
+				windowAmount = newWindowAmount;
+
+
+
+				for(i = 0; i < windowAmount; inc i){
+					xcb_get_property_reply_t *reply1 = xcb_get_property_reply(connection, xcb_get_property(connection, false, windows[i], *(atomStart + 1), *(atomStart + 2), 0, 1024), NULL);
+					if(reply1){
+						char *result;
+						uint size = xcb_get_property_value_length(reply1);
+						bool flag = false;
+						if(size + 3 > cutoffPoint){
+							size = cutoffPoint;
+							flag = true;
+						}
+						result = malloc(size + 1);
+						memcpy(result, xcb_get_property_value(reply1), size);
+						if(flag){
+							result[size + 0] = '.';
+							result[size + 1] = '.';
+							result[size + 2] = '.';
+							result[size + 3] = '\0';
+						}else{
+							result[size] = '\0';
+						}
+						stringList[i] = result;
+						free(reply1);
+					}else{
+						stringList[i] = NULL;
+					}
+					windowList[i] = windows[i];
+					reply1 = xcb_get_property_reply(connection, xcb_get_property(connection, false, windows[i], *(atomStart + 3), XCB_ATOM_CARDINAL, 0, 1), NULL);
+					if(reply1){
+						desktopList[i] = *(uint32 *)xcb_get_property_value(reply1);
+						free(reply1);
+					}else{
+						desktopList[i] = -1;
+					}
+					xcb_change_window_attributes(connection, windows[i], XCB_CW_EVENT_MASK, &valueList);
+				}
+				free(reply);
+
+
+
+
+
+
+
+
+
+			}
+		}else{
+			uint i;
+			for(i = 0; i < windowAmount; inc i){
+				if((*(xcb_property_notify_event_t *)event).window == windowList[i]){
+					xcb_get_property_reply_t *reply = xcb_get_property_reply(connection, xcb_get_property(connection, false, (*(xcb_property_notify_event_t *)event).window, *(atomStart + 1), *(atomStart + 2), 0, 1024), NULL);
+					free(stringList[i]);
+					stringList[i] = NULL;
+					if(reply){
+						char *result;
+						uint size = xcb_get_property_value_length(reply);
+						bool flag = false;
+						if(size + 3 > cutoffPoint){
+							size = cutoffPoint;
+							flag = true;
+						}
+						result = malloc(size + 1);
+						memcpy(result, xcb_get_property_value(reply), size);
+						if(flag){
+							result[size + 0] = '.';
+							result[size + 1] = '.';
+							result[size + 2] = '.';
+							result[size + 3] = '\0';
+						}else{
+							result[size] = '\0';
+						}
+						stringList[i] = result;
+						free(reply);
+					}
+					if((reply = xcb_get_property_reply(connection, xcb_get_property(connection, false, (*(xcb_property_notify_event_t *)event).window, *(atomStart + 3), XCB_ATOM_CARDINAL, 0, 1), NULL))){
+						desktopList[i] = *(uint32 *)xcb_get_property_value(reply);
+						free(reply);
+					}else{
+						desktopList[i] = -1;
+					}
+					brk;
+				}
+			}
+		}
+		if(mapped){
+			jmp exposeEvent;
+		}
+		jmp eventLoop;
+	}
+	clientMessage:{
+		/*! xcb_get_atom_name_reply_t *reply = xcb_get_atom_name_reply(connection, xcb_get_atom_name(connection, (*(xcb_client_message_event_t *)event).type), NULL);
+		fprintf(stdout, "atom: %.*s\n", xcb_get_atom_name_name_length(reply), xcb_get_atom_name_name(reply));
+		free(reply); */
+		jmp eventLoop;
+	}
+	errorEvent:{
+		genericError = (void *)event;
+		printXCBError();
+		genericError = NULL;
 		jmp eventLoop;
 	}
 	unexpectedEvent:{
 		printUnexpectedEvent();
 		jmp eventLoop;
 	}
-	eventLoopExit:
+	eventLoopExit:{
+		free(event);
+		event = NULL;
+		jmp mainEmergencyExit;
+	}
 	mainEmergencyExit:{
-		xcb_disconnect(connection); connection = NULL;
+		xcb_disconnect(connection);
+		connection = NULL;
 		ret 0;
 	}
 }
 PRINTERROR_DEC{
-	printProperError("%s: %s\n", programName, string);
-	ret;
-}
-PRINTPROPERERROR_DEC{
 	if(openErrorStream()){
-		va_list arguments;
-		va_start(arguments, message);
-		vfprintf(errorStream, message, arguments);
-		va_end(arguments);
+		fprintf(errorStream, "%s: %s\n", programName, string);
 		closeErrorStream();
 	}
 	ret;
@@ -601,24 +802,319 @@ OPENERRORSTREAM_DEC{
 }
 CLOSEERRORSTREAM_DEC{
 	if(mustOpenErrorStream and errorStream){
-		fclose(errorStream); errorStream = NULL;
+		fclose(errorStream);
+		errorStream = NULL;
 	}
 	ret;
 }
 PRINTCONNECTIONERROR_DEC{
-	const char *string;
-	jmp findConnectionError;
-	findConnectionError: switch xcb_connection_has_error(connection) over
-		to XCB_CONN_ERROR: /*-------------------*/ string = "socket / pipe / stream"; /*----*/ jmp printConnectionError;
-		to XCB_CONN_CLOSED_EXT_NOTSUPPORTED: /*-*/ string = "extension not supported"; /*---*/ jmp printConnectionError;
-		to XCB_CONN_CLOSED_MEM_INSUFFICIENT: /*-*/ string = "insufficient memory"; /*-------*/ jmp printConnectionError;
-		to XCB_CONN_CLOSED_REQ_LEN_EXCEED: /*---*/ string = "exceeded request length"; /*---*/ jmp printConnectionError;
-		to XCB_CONN_CLOSED_PARSE_ERR: /*--------*/ string = "parsing display string"; /*----*/ jmp printConnectionError;
-		to XCB_CONN_CLOSED_INVALID_SCREEN: /*---*/ string = "screen - display mismatch"; /*-*/ jmp printConnectionError;
-		off: /*---------------------------------*/ string = "unrecognized connection"; /*---*/ jmp printConnectionError;
-	end
-	printConnectionError:{
-		printProperError("%s: fatal %s error, exiting\n", programName, string);
+	if(openErrorStream()){
+		#define PRINTCONNECTIONERROR_ERROR /*--*/ xcb_connection_has_error(connection)
+		#define PRINTCONNECTIONERROR_STREAM /*-*/ errorStream
+		#include "xcb/printConnectionError.hold"
+		closeErrorStream();
+	}
+	ret;
+}
+REQUESTCHECK_DEC{
+	if(!(genericError = xcb_request_check(connection, c))){
 		ret;
 	}
+	if(errorCode != XCB_NONE and (*genericError).error_code == errorCode){
+		printError(errorMessage);
+	}else{
+		printXCBError();
+	}
+	free(genericError);
+	genericError = NULL;
+	ret;
+}
+#if DEBUG
+PRINTEVENT_DEC{
+	#define PRINTEVENT_EVENT /*--*/ event
+	#define PRINTEVENT_STREAM /*-*/ stdout
+	#include "xcb/printEvent.hold"
+	ret;
+}
+#endif
+PRINTXCBERROR_DEC{
+	if(openErrorStream()){
+		#define PRINTXCBERROR_ERROR /*--*/ genericError
+		#define PRINTXCBERROR_STREAM /*-*/ errorStream
+		#include "xcb/printXCBError.hold"
+		closeErrorStream();
+	}
+	ret;
+}
+#if DEBUG
+PRINTUNEXPECTEDEVENT_DEC{
+	if(openErrorStream()){
+		#define PRINTUNEXPECTEDEVENT_EVENT /*--*/ event
+		#define PRINTUNEXPECTEDEVENT_STREAM /*-*/ errorStream
+		#include "xcb/printUnexpectedEvent.hold"
+		closeErrorStream();
+	}
+	ret;
+}
+#endif
+void doubleBoxBlur(const int width, const int height, uint32 *originalData, uint32 *intermediateData, uint32 *destinationData, const int boxSize){
+	const int divisor = boxSize * boxSize;
+	const int boxDistanceFromZero = boxSize >> 1;
+	const int nBoxDistanceFromZero = -boxDistanceFromZero;
+	const int widthMinusOne = width - 1;
+	const int heightMinusOne = height - 1;
+	const int heightMinusBoxSize = height - boxSize;
+	uint32 *tx = originalData;
+	uint32 *txCopy = tx;
+	uint32 *rx = intermediateData;
+	uint32 r;
+	uint32 g;
+	uint32 b;
+	loop:{
+		uint32 *kernelColumnRCurrent = kernelColumnRStart;
+		uint32 *kernelColumnGCurrent = kernelColumnGStart;
+		uint32 *kernelColumnBCurrent = kernelColumnBStart;
+		uint32 *kernelColumnRCurrentCopy = kernelColumnRStart;
+		uint32 *kernelColumnGCurrentCopy = kernelColumnGStart;
+		uint32 *kernelColumnBCurrentCopy = kernelColumnBStart;
+		uint32 *pixelRCurrent = pixelRStart;
+		uint32 *pixelGCurrent = pixelGStart;
+		uint32 *pixelBCurrent = pixelBStart;
+		uint32 *pixelRCurrentCopy = pixelRStart;
+		uint32 *pixelGCurrentCopy = pixelGStart;
+		uint32 *pixelBCurrentCopy = pixelBStart;
+		int x = 0;
+		int y = 0;
+		{
+			int kx = nBoxDistanceFromZero;
+			r = 0;
+			g = 0;
+			b = 0;
+			while(kx <= boxDistanceFromZero){
+				int ky = nBoxDistanceFromZero;
+				int usedX = x + kx;
+				if(usedX < 0){
+					usedX = 0;
+				}
+				*kernelColumnRCurrent = 0;
+				*kernelColumnGCurrent = 0;
+				*kernelColumnBCurrent = 0;
+				tx += usedX;
+				while(ky <= boxDistanceFromZero){
+					int usedY = y + ky;
+					uint32 color;
+					if(usedY < 0){
+						usedY = 0;
+					}
+					color = *(tx + usedY * width);
+					*pixelRCurrent = (color & 0xFF0000) >> 16;
+					*pixelGCurrent = (color & 0x00FF00) >>  8;
+					*pixelBCurrent =  color & 0x0000FF;
+					*kernelColumnRCurrent += *pixelRCurrent;
+					*kernelColumnGCurrent += *pixelGCurrent;
+					*kernelColumnBCurrent += *pixelBCurrent;
+					inc pixelRCurrent;
+					inc pixelGCurrent;
+					inc pixelBCurrent;
+					inc ky;
+				}
+				tx -= usedX;
+				r += *kernelColumnRCurrent;
+				g += *kernelColumnGCurrent;
+				b += *kernelColumnBCurrent;
+				pixelRCurrent += heightMinusBoxSize;
+				pixelGCurrent += heightMinusBoxSize;
+				pixelBCurrent += heightMinusBoxSize;
+				inc kernelColumnRCurrent;
+				inc kernelColumnGCurrent;
+				inc kernelColumnBCurrent;
+				inc kx;
+			}
+			*rx = 0xFF000000 + ((r / divisor) << 16) + ((g / divisor) << 8) + b / divisor;
+			inc rx;
+		}
+		inc x;
+		xFirstLoop:{
+			int kx = boxDistanceFromZero;
+			int ky = nBoxDistanceFromZero;
+			int usedX = x + kx;
+			if(usedX < 0){
+				usedX = 0;
+			}elif(usedX >= width){
+				usedX = widthMinusOne;
+			}
+			r -= *kernelColumnRCurrentCopy;
+			g -= *kernelColumnGCurrentCopy;
+			b -= *kernelColumnBCurrentCopy;
+			kernelColumnRCurrent = kernelColumnRCurrentCopy + boxSize;
+			kernelColumnGCurrent = kernelColumnGCurrentCopy + boxSize;
+			kernelColumnBCurrent = kernelColumnBCurrentCopy + boxSize;
+			inc kernelColumnRCurrentCopy;
+			inc kernelColumnGCurrentCopy;
+			inc kernelColumnBCurrentCopy;
+			{
+				uint32 lr = 0;
+				uint32 lg = 0;
+				uint32 lb = 0;
+				tx += usedX;
+				while(ky <= boxDistanceFromZero){
+					int usedY = y + ky;
+					uint32 color;
+					if(usedY < 0){
+						usedY = 0;
+					}elif(usedY >= height){
+						usedY = heightMinusOne;
+					}
+					color = *(tx + usedY * width);
+					*pixelRCurrent = (color & 0xFF0000) >> 16;
+					*pixelGCurrent = (color & 0x00FF00) >>  8;
+					*pixelBCurrent =  color & 0x0000FF;
+					lr += *pixelRCurrent;
+					lg += *pixelGCurrent;
+					lb += *pixelBCurrent;
+					inc pixelRCurrent;
+					inc pixelGCurrent;
+					inc pixelBCurrent;
+					inc ky;
+				}
+				tx -= usedX;
+				r += lr;
+				g += lg;
+				b += lb;
+				*kernelColumnRCurrent = lr;
+				*kernelColumnGCurrent = lg;
+				*kernelColumnBCurrent = lb;
+				pixelRCurrent += heightMinusBoxSize;
+				pixelGCurrent += heightMinusBoxSize;
+				pixelBCurrent += heightMinusBoxSize;
+			}
+			*rx = 0xFF000000 + ((r / divisor) << 16) + ((g / divisor) << 8) + b / divisor;
+			inc rx;
+			if(inc x < width){
+				jmp xFirstLoop;
+			}
+		}
+		inc y;
+		yLoop:{
+			uint32 *pr;
+			uint32 *pg;
+			uint32 *pb;
+			int ky = boxDistanceFromZero;
+			int usedY = y + ky;
+			if(usedY < 0){
+				usedY = 0;
+			}elif(usedY >= height){
+				usedY = heightMinusOne;
+			}
+			x = 0;
+			{
+				int kx = nBoxDistanceFromZero;
+				kernelColumnRCurrent = kernelColumnRStart;
+				kernelColumnGCurrent = kernelColumnGStart;
+				kernelColumnBCurrent = kernelColumnBStart;
+				kernelColumnRCurrentCopy = kernelColumnRStart;
+				kernelColumnGCurrentCopy = kernelColumnGStart;
+				kernelColumnBCurrentCopy = kernelColumnBStart;
+				pixelRCurrent = pixelRCurrentCopy;
+				pixelGCurrent = pixelGCurrentCopy;
+				pixelBCurrent = pixelBCurrentCopy;
+				pr = pixelRCurrent + boxSize;
+				pg = pixelGCurrent + boxSize;
+				pb = pixelBCurrent + boxSize;
+				r = 0;
+				g = 0;
+				b = 0;
+				tx += usedY * width;
+				while(kx <= boxDistanceFromZero){
+					int usedX = x + kx;
+					uint32 color;
+					if(usedX < 0){
+						usedX = 0;
+					}elif(usedX >= width){
+						usedX = widthMinusOne;
+					}
+					color = *(tx + usedX);
+					*pr = (color & 0xFF0000) >> 16;
+					*pg = (color & 0x00FF00) >>  8;
+					*pb =  color & 0x0000FF;
+					*kernelColumnRCurrent += *pr - *pixelRCurrent;
+					*kernelColumnGCurrent += *pg - *pixelGCurrent;
+					*kernelColumnBCurrent += *pb - *pixelBCurrent;
+					r += *kernelColumnRCurrent;
+					g += *kernelColumnGCurrent;
+					b += *kernelColumnBCurrent;
+					pixelRCurrent += height;
+					pixelGCurrent += height;
+					pixelBCurrent += height;
+					pr += height;
+					pg += height;
+					pb += height;
+					inc kernelColumnRCurrent;
+					inc kernelColumnGCurrent;
+					inc kernelColumnBCurrent;
+					inc kx;
+				}
+				tx -= usedY * width;
+				*rx = 0xFF000000 + ((r / divisor) << 16) + ((g / divisor) << 8) + b / divisor;
+				inc rx;
+				inc x;
+			}
+			{
+				int usedX = x + boxDistanceFromZero;
+				usedY *= width;
+				tx += usedY;
+				xLoop:{
+					uint32 color;
+					if(usedX >= width){
+						usedX = widthMinusOne;
+					}
+					kernelColumnRCurrent = kernelColumnRCurrentCopy + boxSize;
+					kernelColumnGCurrent = kernelColumnGCurrentCopy + boxSize;
+					kernelColumnBCurrent = kernelColumnBCurrentCopy + boxSize;
+					r -= *kernelColumnRCurrentCopy;
+					g -= *kernelColumnGCurrentCopy;
+					b -= *kernelColumnBCurrentCopy;
+					color = *(tx + usedX);
+					*pr = (color & 0xFF0000) >> 16;
+					*pg = (color & 0x00FF00) >>  8;
+					*pb =  color & 0x0000FF;
+					*kernelColumnRCurrent += *pr - *pixelRCurrent;
+					*kernelColumnGCurrent += *pg - *pixelGCurrent;
+					*kernelColumnBCurrent += *pb - *pixelBCurrent;
+					r += *kernelColumnRCurrent;
+					g += *kernelColumnGCurrent;
+					b += *kernelColumnBCurrent;
+					inc kernelColumnRCurrentCopy;
+					inc kernelColumnGCurrentCopy;
+					inc kernelColumnBCurrentCopy;
+					pixelRCurrent += height;
+					pixelGCurrent += height;
+					pixelBCurrent += height;
+					pr += height;
+					pg += height;
+					pb += height;
+					*rx = 0xFF000000 + ((r / divisor) << 16) + ((g / divisor) << 8) + b / divisor;
+					inc rx;
+					if(inc x < width){
+						inc usedX;
+						jmp xLoop;
+					}
+				}
+				tx -= usedY;
+			}
+			if(inc y < height){
+				inc pixelRCurrentCopy;
+				inc pixelGCurrentCopy;
+				inc pixelBCurrentCopy;
+				jmp yLoop;
+			}
+		}
+		if(txCopy == originalData){
+			tx = intermediateData;
+			txCopy = tx;
+			rx = destinationData;
+			jmp loop;
+		}
+	}
+	ret;
 }
