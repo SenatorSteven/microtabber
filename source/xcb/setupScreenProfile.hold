@@ -1,0 +1,76 @@
+/*! setupScreenProfile.hold
+
+MIT License
+
+Copyright (C) 2022 Stefanos "Steven" Tsakiris
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
+#ifndef SETUPSCREENPROFILE_HOLD
+#define SETUPSCREENPROFILE_HOLD
+
+#ifndef SETUPSCREENPROFILE_VISUAL
+	#error setupScreenProfile.hold requires visual variable
+#endif
+#ifndef SETUPSCREENPROFILE_DEPTH
+	#error setupScreenProfile.hold requires depth variable
+#endif
+
+#define _SETUPSCREENPROFILE_VISUAL /*-*/ (SETUPSCREENPROFILE_VISUAL)
+#define _SETUPSCREENPROFILE_DEPTH /*--*/ (SETUPSCREENPROFILE_DEPTH)
+
+{
+	xcb_depth_iterator_t depthIterator = xcb_screen_allowed_depths_iterator(screen);
+	xcb_visualtype_iterator_t visualIterator;
+	_SETUPSCREENPROFILE_VISUAL = (*screen).root_visual;
+	_SETUPSCREENPROFILE_DEPTH = (*screen).root_depth;
+	setupScreenProfileFindDepth:{
+		if((*depthIterator.data).depth == 32){
+			visualIterator = xcb_depth_visuals_iterator(depthIterator.data);
+			jmp setupScreenProfileFindVisual;
+		}
+		if(depthIterator.rem){
+			xcb_depth_next(&depthIterator);
+			jmp setupScreenProfileFindDepth;
+		}
+		jmp setupScreenProfileExit;
+	}
+	setupScreenProfileFindVisual:{
+		if((*visualIterator.data)._class == XCB_VISUAL_CLASS_TRUE_COLOR){
+			_SETUPSCREENPROFILE_VISUAL = (*visualIterator.data).visual_id;
+			_SETUPSCREENPROFILE_DEPTH = (*depthIterator.data).depth;
+			jmp setupScreenProfileExit;
+		}
+		if(visualIterator.rem){
+			dec visualIterator.rem;
+			inc visualIterator.data;
+			jmp setupScreenProfileFindVisual;
+		}
+		jmp setupScreenProfileExit;
+	}
+	setupScreenProfileExit:{}
+}
+
+#undef  _SETUPSCREENPROFILE_DEPTH
+#undef  _SETUPSCREENPROFILE_VISUAL
+
+#undef   SETUPSCREENPROFILE_DEPTH
+#undef   SETUPSCREENPROFILE_VISUAL
+
+#endif
