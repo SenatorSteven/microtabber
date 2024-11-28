@@ -1,8 +1,21 @@
+
+/*!
+	consider removing the default C keywords to improve compiler message readability
+*/
+
+
+
+
+
+
+
+
+
 /*! cold.hold
 
 MIT License
 
-Copyright (C) 2022 Stefanos "Steven" Tsakiris
+Copyright (C) 2023 Stefanos "Steven" Tsakiris
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -28,91 +41,104 @@ SOFTWARE. */
 #define EMPTY_MACRO /*-*/
 
 /*!CKeywords:{*/
-	#define typedef /*--*/ typedef
-	#define extern /*---*/ extern
-	#define static /*---*/ static
-	#define auto /*-----*/ auto
-	#define register /*-*/ register
-	#define volatile /*-*/ volatile
-	#define const /*----*/ const
-	#define short /*----*/ short
-	#define long /*-----*/ long
-	#define signed /*---*/ signed
-	#define unsigned /*-*/ unsigned
-	#define void /*-----*/ void
-	#define int /*------*/ int
-	#define char /*-----*/ char
-	#define float /*----*/ float
-	#define double /*---*/ double
-	#define enum /*-----*/ enum
-	#define union /*----*/ union
-	#define struct /*---*/ struct
-	#define sizeof /*---*/ sizeof
-	#define if /*-------*/ if
-	#define else /*-----*/ else
-	#define switch /*---*/ switch
-	#define case /*-----*/ case
-	#define default /*--*/ default
-	#define break /*----*/ break
-	#define do /*-------*/ do
-	#define while /*----*/ while
-	#define for /*------*/ for
-	#define continue /*-*/ continue
-	#define goto /*-----*/ goto
-	#define return /*---*/ return
+	#ifdef a
+		#define typedef /*--*/ typedef
+		#define extern /*---*/ extern
+		#define static /*---*/ static
+		#define auto /*-----*/ auto
+		#define register /*-*/ register
+		#define volatile /*-*/ volatile
+		#define const /*----*/ const
+		#define short /*----*/ short
+		#define long /*-----*/ long
+		#define signed /*---*/ signed
+		#define unsigned /*-*/ unsigned
+		#define void /*-----*/ void
+		#define int /*------*/ int
+		#define char /*-----*/ char
+		#define float /*----*/ float
+		#define double /*---*/ double
+		#define enum /*-----*/ enum
+		#define union /*----*/ union
+		#define struct /*---*/ struct
+		#define sizeof /*---*/ sizeof
+		#define if /*-------*/ if
+		#define else /*-----*/ else
+		#define switch /*---*/ switch
+		#define case /*-----*/ case
+		#define default /*--*/ default
+		#define break /*----*/ break
+		#define do /*-------*/ do
+		#define while /*----*/ while
+		#define for /*------*/ for
+		#define continue /*-*/ continue
+		#define goto /*-----*/ goto
+		#define return /*---*/ return
+	#endif
 
 	#undef  inline
-	#define inline /*---*/ EMPTY_MACRO
+	#define inline /*-------------*/ EMPTY_MACRO
 /*!}*/
 
 /*!coldKeywords:{*/
-	#define def /*------*/ typedef
-	#define local /*----*/ static
-	#define inc /*------*/ ++
-	#define dec /*------*/ --
-	#define true /*-----*/ (1)
-	#define false /*----*/ (0)
-	#define and /*------*/ &&
-	#define or /*-------*/ ||
-	#define not /*------*/ !
-	#define elif /*-----*/ else if
+	#define def /*----------------*/ typedef
+	#define local /*--------------*/ static
+	#define inc /*----------------*/ ++
+	#define dec /*----------------*/ --
+	#define true /*---------------*/ (1)
+	#define false /*--------------*/ (0)
+	#define bitsof(t) /*----------*/ (sizeof(t) * 8)
+	#define countof(t) /*---------*/ (sizeof(t) / sizeof(*t))
+	#define lengthof(s) /*--------*/ (sizeof(s) - 1)
+	#define and /*----------------*/ &&
+	#define or /*-----------------*/ ||
+	#define not /*----------------*/ !
+	#define elif /*---------------*/ else if
 	#undef  switch
-	#define switch /*---*/ switch(
-	#define over /*-----*/ ){
-	#define to /*-------*/ case
-	#define off /*------*/ default
-	#define end /*------*/ }
-	#define brk /*------*/ break
-	#define jmp /*------*/ goto
-	#define ret /*------*/ return
+	#define switch /*-------------*/ switch(
+	#define over /*---------------*/ ){
+	#define to /*-----------------*/ case
+	#define off /*----------------*/ default
+	#define end /*----------------*/ }
+	#define brk /*----------------*/ break
+	#define jmp /*----------------*/ goto
+	#define ret /*----------------*/ return
+/*!}*/
+
+/*!coldSTDFunctions:{*/
+	#define ln(n) /*--------------*/ (log(n))
 /*!}*/
 
 /*!coldFunctions:{*/
-	#define _b(d, b) /*----*/ (d > (sizeof(#b) - 1)? 0 : ((*(#b + (sizeof(#b) - 1) - d) - 48) == 1) * ((uint64)1 << (d - 1)))
+	#define b(n0) /*--------------*/ (b1(n0))
+	#define b1(n0) /*-------------*/ (((uint16)_B16(2##n0) <<  0)                 )
+	#define b2(n1, n0) /*---------*/ (((uint32)_B16(2##n1) << 16) + b1(        n0))
+	#define b3(n2, n1, n0) /*-----*/ (((uint64)_B16(2##n2) << 32) + b2(    n1, n0))
+	#define b4(n3, n2, n1, n0) /*-*/ (((uint64)_B16(2##n3) << 48) + b3(n2, n1, n0))
 
-	#define b(b) /*--------*/ ( \
-		  _b( 1, b) + _b( 2, b) + _b( 3, b) + _b( 4, b) + _b( 5, b) + _b( 6, b) + _b( 7, b) + _b( 8, b) \
-		+ _b( 9, b) + _b(10, b) + _b(11, b) + _b(12, b) + _b(13, b) + _b(14, b) + _b(15, b) + _b(16, b) \
-		+ _b(17, b) + _b(18, b) + _b(19, b) + _b(20, b) + _b(21, b) + _b(22, b) + _b(23, b) + _b(24, b) \
-		+ _b(25, b) + _b(26, b) + _b(27, b) + _b(28, b) + _b(29, b) + _b(30, b) + _b(31, b) + _b(32, b) \
-		+ _b(33, b) + _b(34, b) + _b(35, b) + _b(36, b) + _b(37, b) + _b(38, b) + _b(39, b) + _b(40, b) \
-		+ _b(41, b) + _b(42, b) + _b(43, b) + _b(44, b) + _b(45, b) + _b(46, b) + _b(47, b) + _b(48, b) \
-		+ _b(49, b) + _b(50, b) + _b(51, b) + _b(52, b) + _b(53, b) + _b(54, b) + _b(55, b) + _b(56, b) \
-		+ _b(57, b) + _b(58, b) + _b(59, b) + _b(60, b) + _b(61, b) + _b(62, b) + _b(63, b) + _b(64, b) \
+	#define _B16(n) /*------------*/ ( \
+		  _B(0, n, 10   ) + _B(4, n, 100000   ) + _B( 8, n, 1000000000   ) + _B(12, n, 10000000000000   ) \
+		+ _B(1, n, 100  ) + _B(5, n, 1000000  ) + _B( 9, n, 10000000000  ) + _B(13, n, 100000000000000  ) \
+		+ _B(2, n, 1000 ) + _B(6, n, 10000000 ) + _B(10, n, 100000000000 ) + _B(14, n, 1000000000000000 ) \
+		+ _B(3, n, 10000) + _B(7, n, 100000000) + _B(11, n, 1000000000000) + _B(15, n, 10000000000000000) \
 	)
+
+	#define _B(p, n, m) /*--------*/ ((n % m * 10 / m == 1) << p)
 /*!}*/
 
 /*!defs:{*/
-	def int8_t /*-------*/ int8;
-	def int16_t /*------*/ int16;
-	def int32_t /*------*/ int32;
-	def int64_t /*------*/ int64;
-	def unsigned int /*-*/ uint;
-	def uint8_t /*------*/ uint8;
-	def uint16_t /*-----*/ uint16;
-	def uint32_t /*-----*/ uint32;
-	def uint64_t /*-----*/ uint64;
-	def uint8_t /*------*/ bool;
+	def unsigned int /*--*/ uint;
+	def unsigned char /*-*/ bool;
+#ifdef UINT64_MAX
+	def int8_t /*--------*/ int8;
+	def int16_t /*-------*/ int16;
+	def int32_t /*-------*/ int32;
+	def int64_t /*-------*/ int64;
+	def uint8_t /*-------*/ uint8;
+	def uint16_t /*------*/ uint16;
+	def uint32_t /*------*/ uint32;
+	def uint64_t /*------*/ uint64;
+#endif
 /*!}*/
 
 #endif
