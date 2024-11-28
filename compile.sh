@@ -1,8 +1,9 @@
+
 # compile.sh
 #
 # MIT License
 #
-# Copyright (C) 2022 Stefanos "Steven" Tsakiris
+# Copyright (C) 2023 Stefanos "Steven" Tsakiris
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +28,7 @@
 DEBUG=false
 
 name="microtabber"
-libraries="-lxcb -lxcb-randr"
+libraries="-D_POSIX_C_SOURCE=200112L -lxcb -lxcb-randr"
 files=""
 
 compileFile(){
@@ -50,4 +51,3 @@ gcc $files $libraries -o output/$name
 printf "#!/bin/bash\n\ncd \$(dirname \$0)\n[ ! -f $name ] && cd \$(cd \$(dirname \$BASH_SOURCE) && pwd) || :\n./$name \"\$@\"\nexit 0\n" > output/run
 chmod +x output/run
 exit 0
-
