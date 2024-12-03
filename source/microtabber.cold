@@ -1,163 +1,48 @@
 
 /*!
-	anything client list and property related is not optimized for the client-server model.
+	massively rethink and check how the mutexes will wrap around things.
 */
 
 /*!
-	gonna have to remember to add guards everywhere to prevent bugs. the user might not like setting variables and shit.
-*/
-
-/*!
-	consider using _NET_WM_VISIBLE_NAME before all the other ones.
-*/
-
-/*!
-	support _NET_WM_STATE's _NET_WM_STATE_DEMANDS_ATTENTION with a differently-colored selection.
-*/
-
-/*!
-	when is the window redrawn? what happens when a window property gets updated, like the desktop, name?
+	add the client pictures to the window using xrender.
 */
 
 /*!
 	consider implementing a rectangle struct for rectangle elements:
 		struct{
-			int32 -- x;
-			int32 -- y;
-			uint32 - width;
-			uint32 - height;
-			uint32 - border;
-			uint32 - backgroundColor;
-			uint32 - borderColor;
-			uint32 - position;        *fixed, relative, maybe something else*
-			uint32 - marginTop;
-			uint32 - marginBottom;
-			uint32 - marginLeft;
-			uint32 - marginRight;
-			uint32 - paddingTop;
-			uint32 - paddingBottom;
-			uint32 - paddingLeft;
-			uint32 - paddingRight;
-		} Rectangle;
+			v   int32 ----- x;
+			v   int32 ----- y;
+			v   uint32 ---- width;
+			v   uint32 ---- height;
+			  x uint32 ---- border;
+			  x uint32 ---- backgroundColor;
+			  x uint32 ---- borderColor;
+			  x uint32 ---- position;        *fixed, relative, maybe something else*
+			  x uint32 ---- marginTop;
+			  x uint32 ---- marginBottom;
+			  x uint32 ---- marginLeft;
+			  x uint32 ---- marginRight;
+			  x uint32 ---- paddingTop;
+			  x uint32 ---- paddingBottom;
+			  x uint32 ---- paddingLeft;
+			  x uint32 ---- paddingRight;
+			v   Monitor * - monitor;
+		} ElementRectangle;
 */
 
 /*!
 	future features:
-		order windows based on an x, y, or (x, y) order
+		support differently colored selections using _NET_WM_STATE's _NET_WM_STATE_DEMANDS_ATTENTION.
+		implement the drawing better to efficiently change something minor like a single window title.
+		order windows based on an x, y, or (x, y) order.
+		check validity of window unmap event.
+		check validity of window map event.
+		check validity of window configure attributes should they change.
+		check validity of window properties should they change.
+		optimize properties further. for example, we shouldn't be keeping both _NET_CLIENT_LIST and _NET_CLIENT_LIST_STACKING updated since the user is using either or neither.
+		use scopes for each element in config.
+		be smarter about round corners, since the user can always be a dick.
 */
-
-/*!
-	custom modifier release logic afoot:
-*/
-
-#ifdef a
-	#define XK_MISCELLANY
-	#include <X11/keysymdef.h>
-	#include <xcb/xcb_keysyms.h>
-
-
-
-	#define GETMODIFIERKEYCODES() /*-*/ local void getModifierKeycodes(void)
-
-	local xcb_keycode_t * /*-*/ modifierKeycodeStart;
-	local uint32 /*----------*/ modifierKeycodeToken;
-	local uint8 /*-----------*/ modifierKeycodePer;
-
-	GETMODIFIERKEYCODES();
-
-	GETMODIFIERKEYCODES(){
-		xcb_get_modifier_mapping_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_modifier_mapping_unchecked(connection), NULL);
-		uint32 token = pushPointer(reply, "get modifier mapping reply", iFree);
-		if(reply){
-			const uint length = xcb_get_modifier_mapping_keycodes_length(reply) / sizeof(xcb_keycode_t);
-			const xcb_keycode_t *keycodeCurrent = xcb_get_modifier_mapping_keycodes(reply);
-			xcb_keycode_t *const tempStart = malloc(length * sizeof(xcb_keycode_t));
-			uint32 tempToken = pushPointer(tempStart, "modifier keycodes pointer", iFree);
-			if(tempStart){
-				xcb_keycode_t *modifierKeycodeCurrent = tempStart;
-				xcb_keycode_t *const modifierKeycodeWall = modifierKeycodeCurrent + length;
-				jmp storeModifierKeycodeLoop;
-				storeModifierKeycodeLoop:{
-					if(modifierKeycodeCurrent < modifierKeycodeWall){
-						*modifierKeycodeCurrent = *keycodeCurrent;
-						inc keycodeCurrent;
-						inc modifierKeycodeCurrent;
-						jmp storeModifierKeycodeLoop;
-					}
-					free(modifierKeycodeStart);
-					popPointer(modifierKeycodeToken);
-					modifierKeycodeStart = tempStart;
-					modifierKeycodeToken = tempToken;
-					modifierKeycodePer = (*reply).keycodes_per_modifier;
-				}
-			}
-			free(reply);
-			popPointer(token);
-		}
-		ret;
-	}
-
-
-
-	modifierKeycodeStart /*-*/ = NULL;
-	modifierKeycodeToken /*-*/ = 0;
-
-
-
-	#define SHIFT_MODIFIER_KEYCODE_OFFSET /*---*/ (0)
-	#define LOCK_MODIFIER_KEYCODE_OFFSET /*----*/ (1)
-	#define CONTROL_MODIFIER_KEYCODE_OFFSET /*-*/ (2)
-	#define MOD_1_MODIFIER_KEYCODE_OFFSET /*---*/ (3)
-	#define MOD_2_MODIFIER_KEYCODE_OFFSET /*---*/ (4)
-	#define MOD_3_MODIFIER_KEYCODE_OFFSET /*---*/ (5)
-	#define MOD_4_MODIFIER_KEYCODE_OFFSET /*---*/ (6)
-	#define MOD_5_MODIFIER_KEYCODE_OFFSET /*---*/ (7)
-	const uint8 *const keyStart = (*reply).keys;
-	const uint16 modifier = (*e).state;
-	uint16 modifierCurrent;
-	jmp retPoint0;
-	retPoint0: if(modifier & XCB_MOD_MASK_SHIFT){ /*---*/ modifierCurrent = SHIFT_MODIFIER_KEYCODE_OFFSET; /*---*/ jmp keyReleaseModifierLookup; }
-	retPoint1: if(modifier & XCB_MOD_MASK_LOCK){ /*----*/ modifierCurrent = LOCK_MODIFIER_KEYCODE_OFFSET; /*----*/ jmp keyReleaseModifierLookup; }
-	retPoint2: if(modifier & XCB_MOD_MASK_CONTROL){ /*-*/ modifierCurrent = CONTROL_MODIFIER_KEYCODE_OFFSET; /*-*/ jmp keyReleaseModifierLookup; }
-	retPoint3: if(modifier & XCB_MOD_MASK_1){ /*-------*/ modifierCurrent = MOD_1_MODIFIER_KEYCODE_OFFSET; /*---*/ jmp keyReleaseModifierLookup; }
-	retPoint4: if(modifier & XCB_MOD_MASK_2){ /*-------*/ modifierCurrent = MOD_2_MODIFIER_KEYCODE_OFFSET; /*---*/ jmp keyReleaseModifierLookup; }
-	retPoint5: if(modifier & XCB_MOD_MASK_3){ /*-------*/ modifierCurrent = MOD_3_MODIFIER_KEYCODE_OFFSET; /*---*/ jmp keyReleaseModifierLookup; }
-	retPoint6: if(modifier & XCB_MOD_MASK_4){ /*-------*/ modifierCurrent = MOD_4_MODIFIER_KEYCODE_OFFSET; /*---*/ jmp keyReleaseModifierLookup; }
-	retPoint7: if(modifier & XCB_MOD_MASK_5){ /*-------*/ modifierCurrent = MOD_5_MODIFIER_KEYCODE_OFFSET; /*---*/ jmp keyReleaseModifierLookup; }
-	jmp keyReleaseModifierLookupExit;
-	keyReleaseModifierLookup:{
-		xcb_keycode_t *current = modifierKeycodeStart + modifierCurrent * modifierKeycodePer;
-		xcb_keycode_t *const wall = current + modifierKeycodePer;
-		jmp keyReleaseModifierLookupLoop;
-		keyReleaseModifierLookupLoop:{
-			if(*current and current < wall){
-				isPressed |= !!(*(keyStart + *current / 8) & (1 << *current % 8));
-				fprintf(stdout, "%u is %u\n", *current, isPressed);
-				inc current;
-				jmp keyReleaseModifierLookupLoop;
-			}
-			switch modifierCurrent over
-				to SHIFT_MODIFIER_KEYCODE_OFFSET: /*---*/ jmp retPoint1;
-				to LOCK_MODIFIER_KEYCODE_OFFSET: /*----*/ jmp retPoint2;
-				to CONTROL_MODIFIER_KEYCODE_OFFSET: /*-*/ jmp retPoint3;
-				to MOD_1_MODIFIER_KEYCODE_OFFSET: /*---*/ jmp retPoint4;
-				to MOD_2_MODIFIER_KEYCODE_OFFSET: /*---*/ jmp retPoint5;
-				to MOD_3_MODIFIER_KEYCODE_OFFSET: /*---*/ jmp retPoint6;
-				to MOD_4_MODIFIER_KEYCODE_OFFSET: /*---*/ jmp retPoint7;
-				off: /*--------------------------------*/ jmp keyReleaseModifierLookupExit;
-			end
-		}
-	}
-	keyReleaseModifierLookupExit:{}
-	#undef  MOD_5_MODIFIER_KEYCODE_OFFSET
-	#undef  MOD_4_MODIFIER_KEYCODE_OFFSET
-	#undef  MOD_3_MODIFIER_KEYCODE_OFFSET
-	#undef  MOD_2_MODIFIER_KEYCODE_OFFSET
-	#undef  MOD_1_MODIFIER_KEYCODE_OFFSET
-	#undef  CONTROL_MODIFIER_KEYCODE_OFFSET
-	#undef  LOCK_MODIFIER_KEYCODE_OFFSET
-	#undef  SHIFT_MODIFIER_KEYCODE_OFFSET
-#endif
 
 
 
@@ -222,6 +107,7 @@ SOFTWARE. */
 	#include <sys/shm.h>
 	#include <sys/stat.h>
 	#include <xcb/randr.h>
+	#include <xcb/render.h>
 	#include <xcb/xcb.h>
 	#include <xcb/xcbext.h>
 	#include "cold/cold.hold"
@@ -375,6 +261,8 @@ SOFTWARE. */
 	#define TITLE_FOREGROUND_VARIABLE /*--------------*/ (36)
 	#define TITLE_BACKGROUND_VARIABLE /*--------------*/ (37)
 	#define TITLE_TEXT_CUTOFF_VARIABLE /*-------------*/ (38)
+	#define SELECTED_CLIENT_VARIABLE /*---------------*/ (39)
+	#define SELECTION_ACTION_VARIABLE /*--------------*/ (40)
 
 	#define EMPTY_SHARED_STATUS /*--------------------*/ (0)
 	#define FULL_SHARED_STATUS /*---------------------*/ (1)
@@ -454,11 +342,13 @@ SOFTWARE. */
 	#define GETTIMESTAMP() /*-------------------------*/ local xcb_timestamp_t  getTimestamp(void)
 	#define GETPOINTERMONITOR() /*--------------------*/ local Monitor *        getPointerMonitor(void)
 	#define GETWINDOWMONITOR() /*---------------------*/ local Monitor *        getWindowMonitor(const xcb_window_t window)
+	#define CREATECIRCLE() /*-------------------------*/ local bool             createCircle(const int radius, const uint32 color, Image *image)
 	#define COMPOSITEIMAGES() /*----------------------*/ local void             compositeImages(void (*operation)(const uint32 *const, uint32 *const), const int sourceX, const int sourceY, Image *const source, int destinationX, int destinationY, Image *const destination)
 	#define COMPOSITEIMAGESOVER() /*------------------*/ local void             compositeImagesOver(const uint32 *const source, uint32 *const destination)
 	#define COMPOSITEIMAGESAND() /*-------------------*/ local void             compositeImagesAnd(const uint32 *const source, uint32 *const destination)
 	#define TWOPASSBOXBLUR() /*-----------------------*/ local void             twoPassBoxBlur(const int width, const int height, const int boxSize, uint32 *destinationData)
 	#define ROTATEIMAGE() /*--------------------------*/ local bool             rotateImage(const uint8 rotation, Image *const image, const bool deletePreviousData)
+	#define FILLDRAWABLE() /*-------------------------*/ local void             fillDrawable(const xcb_drawable_t drawable, const xcb_gcontext_t gc, const int16 x, const int16 y, const uint16 width, const uint16 height, const uint32 color)
 	#define RESTARTCOMMAND() /*-----------------------*/ local void             restartCommand(void)
 	#define EXITCOMMAND() /*--------------------------*/ local void             exitCommand(void)
 	#define CANCELTHREADS() /*------------------------*/ local void             cancelThreads(void)
@@ -487,17 +377,18 @@ SOFTWARE. */
 	#define findString(a, b) /*-----------------------*/ (!getStringNode(a, (const char **const)(b)))
 
 	#if DEBUG
-		#define printXEvent(n) /*--------*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %sX event:%s %s\n", colorStart, programName, colorEvent, colorEnd \
-			, useXEventName(n, eventName) \
-			: useXEventName(n, randrEventName) \
-			: useXEventName(n, xfixesEventName) \
-			: "unhandled extension event" \
+		#define printXEvent(n) /*--*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %s%s:%s %s\n", colorStart, programName, colorEvent \
+			, n ==      eventName?           "X event" \
+			: n == randrEventName?     "randr X event" \
+			:                      "extension X event" \
+			, colorEnd \
+			, n != eventName and n != randrEventName? \
+			"unhandled extension event" : *(n + (((*event).response_type & ~b(10000000)) >= countof(n)? countof(n) - 1 : (*event).response_type & ~b(10000000))) \
 		))
-		#define useXEventName(n0, n1) /*-*/ n0 == n1? *(n1 + (((*event).response_type & ~b(10000000)) >= countof(n1)? countof(n1) - 1 : (*event).response_type & ~b(10000000)))
-		#define printCommand(void) /*----*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %scommand:%s %s\n", colorStart, programName, colorEvent, colorEnd, *(commandList + ((*eventModifierNode).command >= countof(commandList)? countof(commandList) - 1 : (*eventModifierNode).command))))
+		#define printCommand(s) /*-*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %scommand " s ":%s %s\n", colorStart, programName, colorEvent, colorEnd, *(commandList + ((*eventModifierNode).command >= countof(commandList)? countof(commandList) - 1 : (*eventModifierNode).command))))
 	#else
-		#define printXEvent(void) /*-----*/ EMPTY_MACRO
-		#define printCommand(void) /*----*/ EMPTY_MACRO
+		#define printXEvent(n) /*--*/ EMPTY_MACRO
+		#define printCommand(s) /*-*/ EMPTY_MACRO
 	#endif
 /*!}*/
 
@@ -693,11 +584,11 @@ SOFTWARE. */
 
 
 	def struct{
-		uint8 * /*------*/ titleStart;
-		uint32 /*-------*/ titleToken;
-		xcb_atom_t /*---*/ titleProperty;
-		xcb_window_t /*-*/ window;
-		uint8 /*--------*/ pad0[4];
+		uint8 * /*-------------*/ titleStart;
+		uint32 /*--------------*/ titleToken;
+		xcb_atom_t /*----------*/ titleProperty;
+		xcb_window_t /*--------*/ window;
+		uint8 /*---------------*/ pad0[4];
 	} Client;
 
 
@@ -753,6 +644,9 @@ SOFTWARE. */
 	local uint8 /*------------------------*/ randrMajorOpcode;
 	local uint8 /*------------------------*/ randrBaseEvent;
 	local uint8 /*------------------------*/ randrBaseError;
+	local uint8 /*------------------------*/ renderMajorOpcode;
+	local uint8 /*------------------------*/ renderBaseEvent;
+	local uint8 /*------------------------*/ renderBaseError;
 	local xcb_visualid_t /*---------------*/ visual;
 	local uint8 /*------------------------*/ depth;
 	local Atom /*-------------------------*/ atom;
@@ -780,13 +674,16 @@ SOFTWARE. */
 	local uint32 /*-----------------------*/ eventToken;
 	local uint8 /*------------------------*/ shortcutCode;
 	local uint16 /*-----------------------*/ shortcutModifier;
+	local bool /*-------------------------*/ expectingSecondKeyRelease;
+	local uint8 /*------------------------*/ realKeyReleaseModifier;
 
 	local const char *const /*------------*/ errorName[] = {"unrecognized", "request", "value", "window", "pixmap", "atom", "cursor", "font", "match", "drawable", "access", "allocation", "colormap", "graphics context", "id choice", "name", "length", "implementation", "unrecognized"};
 	local const char *const /*------------*/ operationName[] = {"unrecognized", "create window", "change window attributes", "get window attributes", "destroy window", "destroy subwindows", "change save set", "reparent window", "map window", "map subwindows", "unmap window", "unmap subwindows", "configure window", "circulate window", "get geometry", "query tree", "intern atom", "get atom name", "change property", "delete property", "get property", "list properties", "set selection owner", "get selection owner", "convert selection", "send event", "grab pointer", "ungrab pointer", "grab button", "ungrab button", "change active pointer grab", "grab keyboard", "ungrab keyboard", "grab key", "ungrab key", "allow events", "grab server", "ungrab server", "query pointer", "get motion events", "translate coordinates", "warp pointer", "set input focus", "get input focus", "query keymap", "open font", "close font", "query font", "query text extents", "list fonts", "list fonts with info", "set font path", "get font path", "create pixmap", "free pixmap", "create graphics context", "change graphics context", "copy graphics context", "set dashes", "set clip rectangles", "free graphics context", "clear area", "copy area", "copy plane", "poly point", "poly line", "poly segment", "poly rectangle", "poly arc", "fill poly", "poly fill rectangle", "poly fill arc", "put image", "get image", "poly text (8)", "poly text (16)", "image text (8)", "image text (16)", "create colormap", "free colormap", "copy colormap and free", "install colormap", "uninstall colormap", "list installed colormaps", "allocate color", "allocate named color", "allocate color cells", "allocate color planes", "free colors", "store colors", "store named color", "query colors", "lookup color", "create cursor", "create glyph cursor", "free cursor", "recolor cursor", "query best size", "query extension", "list extensions", "change keyboard mapping", "get keyboard mapping", "change keyboard control", "get keyboard control", "bell", "change pointer control", "get pointer control", "set screen saver", "get screen saver", "change hosts", "list hosts", "set access control", "set close down mode", "kill client", "rotate properties", "force screen saver", "set pointer mapping", "get pointer mapping", "set modifier mapping", "get modifier mapping", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "no", "unrecognized"};
 	local const char *const /*------------*/ randrErrorName[] = {"bad output", "bad crtc", "bad mode", "bad provider", "unrecognized"};
 	local const char *const /*------------*/ randrOperationName[] = {"query version", "unrecognized", "set screen config", "unrecognized", "select input", "get screen info", "get screen size range", "set screen size", "get screen resources", "get output info", "list output properties", "query output property", "configure output property", "change output property", "delete output property", "get output property", "create mode", "destroy mode", "add output mode", "delete output mode", "get crtc info", "set crtc config", "get crtc gamma size", "get crtc gamma", "set crtc gamma", "get screen resources current", "set crtc transform", "get crtc transform", "get panning", "set panning", "set output primary", "get output primary", "get providers", "get provider info", "set provider offload sink", "set provider output source", "list provider properties", "query provider property", "configure provider property", "change provider property", "delete provider property", "get provider property", "get monitors", "set monitor", "delete monitor", "create lease", "free lease", "unrecognized"};
-	local const char *const /*------------*/ xfixesErrorName[] = {"bad region", "unrecognized"};
-	local const char *const /*------------*/ xfixesOperationName[] = {"query version", "change save set", "select selection input", "select cursor input", "get cursor image", "create region", "create region from bitmap", "create region from window", "create region from graphics context", "create region from picture", "destroy region", "set region", "copy region", "union region", "intersect region", "subtract region", "invert region", "translate region", "region extents", "fetch region", "set graphics context clip region", "set window shape region", "set picture clip region", "set cursor name", "get cursor name", "get cursor image and name", "change cursor", "change cursor by name", "expand region", "hide cursor", "show cursor", "create pointer barrier", "delete pointer barrier", "set client disconnect mode", "get client disconnect mode", "unrecognized"};
+
+	local const char *const /*------------*/ renderErrorName[] = {"picture format", "picture", "picture operation", "glyph set", "glyph", "unrecognized"};
+	local const char *const /*------------*/ renderOperationName[] = {"query version", "query picture formats", "query picture index values", "unrecognized", "create picture", "change picture", "set picture clip rectangles", "free picture", "composite", "unrecognized", "trapezoids", "triangles", "triangle strip", "triangle fan", "unrecognized", "unrecognized", "unrecognized", "create glyph set", "reference glyph set", "free glyph set", "add glyphs", "unrecognized", "free glyphs", "composite glyphs", "composite glyphs", "composite glyphs", "fill rectangles", "create cursor", "set picture transform", "query filters", "set picture filter", "create animated cursor", "add traps", "create solid fill", "create linear gradient", "create radial gradient", "create conical gradient", "unrecognized"};
 
 	local const char *const /*------------*/ globalScopesInstructionList[] = {
 		  "scope1"
@@ -876,6 +773,8 @@ SOFTWARE. */
 		, "title-foreground"
 		, "title-background"
 		, "title-text-cutoff"
+		, "selected-client"
+		, "selection-action"
 		, NULL
 	};
 	local const char *const /*------------*/ modifierList[] = {
@@ -918,6 +817,7 @@ SOFTWARE. */
 	local StringNodeRoot /*---------------*/ horizontalAlignmentRoot;
 	local StringNodeRoot /*---------------*/ verticalAlignmentRoot;
 	local StringNodeRoot /*---------------*/ selectionActionRoot;
+	local StringNodeRoot /*---------------*/ selectedClientRoot;
 
 	local const char *const /*------------*/ numberTypeList[] = {
 		  "none"
@@ -953,6 +853,13 @@ SOFTWARE. */
 		  "none"
 		, "focus-window"
 		, "move-to-desktop"
+		, NULL
+	};
+	local const char *const /*------------*/ selectedClientList[] = {
+		  "none"
+		, "first"
+		, "last"
+		, "focused"
 		, NULL
 	};
 
@@ -1016,6 +923,8 @@ SOFTWARE. */
 	local const Instruction /*------------*/ titleForegroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ titleBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ titleTextCutoffSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ selectedClientSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ selectionActionSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ executeGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, EXECUTE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ executeGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, EXECUTE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 
@@ -1070,6 +979,8 @@ SOFTWARE. */
 	local StringNodeRoot *const /*--------*/ titleForegroundSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ titleBackgroundSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ titleTextCutoffSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ selectedClientSetSubinstructionData[] = {&variableRoot, &selectedClientRoot};
+	local StringNodeRoot *const /*--------*/ selectionActionSetSubinstructionData[] = {&variableRoot, &selectionActionRoot};
 	local StringNodeRoot *const /*--------*/ executeGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
 	local StringNodeRoot *const /*--------*/ executeGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
 
@@ -1108,7 +1019,7 @@ SOFTWARE. */
 	#if DEBUG
 	local const char *const /*------------*/ eventName[] = {"error", "unrecognized", "key press", "key release", "button press", "button release", "motion notify", "enter notify", "leave notify", "focus in", "focus out", "keymap notify", "expose", "graphics expose", "no expose", "visibility notify", "create notify", "destroy notify", "unmap notify", "map notify", "map request", "reparent notify", "configure notify", "configure request", "gravity notify", "resize request", "circulate notify", "circulate request", "property notify", "selection clear", "selection request", "selection notify", "colormap notify", "client message", "mapping notify", "generic event"};
 	local const char *const /*------------*/ randrEventName[] = {"screen change notify", "notify", "unrecognized"};
-	local const char *const /*------------*/ xfixesEventName[] = {"selection notify", "cursor notify", "unrecognized"};
+	local const char *const /*------------*/ renderEventName[] = {"unrecognized"};
 	#endif
 /*!}*/
 
@@ -1157,11 +1068,13 @@ SOFTWARE. */
 	GETTIMESTAMP();
 	GETPOINTERMONITOR();
 	GETWINDOWMONITOR();
+	CREATECIRCLE();
 	COMPOSITEIMAGES();
 	COMPOSITEIMAGESOVER();
 	COMPOSITEIMAGESAND();
 	TWOPASSBOXBLUR();
 	ROTATEIMAGE();
+	FILLDRAWABLE();
 	RESTARTCOMMAND();
 	EXITCOMMAND();
 	CANCELTHREADS();
@@ -1231,7 +1144,6 @@ SOFTWARE. */
 #define NONE_SELECTION_ACTION /*--------------------*/ (0)
 #define FOCUS_WINDOW_SELECTION_ACTION /*------------*/ (1)
 #define MOVE_TO_DESKTOP_SELECTION_ACTION /*---------*/ (2)
-/*! #define BOTH_SELECTION_ACTION (3) */
 
 /*! globals */
 	local xcb_pixmap_t /*-----------------*/ pixmap;
@@ -1247,7 +1159,18 @@ SOFTWARE. */
 	local Client * /*---------------------*/ clientListStackingStart;
 	local uint32 /*-----------------------*/ clientListStackingToken;
 
+	local uint * /*-----------------------*/ selectedClientListSize;
+	local Client ** /*--------------------*/ selectedClientListStart;
+
 	local bool /*-------------------------*/ mapped;
+
+	local int /*--------------------------*/ currentSelection;
+	local int /*--------------------------*/ selectionRowSize;       /*!*/
+	local int /*--------------------------*/ maxSelectionRowSize;    /*!*/
+	local int /*--------------------------*/ selectionColumnSize;    /*!*/
+	local int /*--------------------------*/ maxSelectionColumnSize; /*!*/
+
+	local xcb_pixmap_t /*-----------------*/ circlePixmap; /*!*/
 
 
 
@@ -1291,8 +1214,8 @@ SOFTWARE. */
 
 	local uint8 /*------------------------*/ whichMonitor;
 
-	local uint8 /*------------------------*/ clientOrder;                 /*! none/creation/stacking */
-	local bool /*-------------------------*/ allowCircularNavigation;     /*!*/
+	local uint8 /*------------------------*/ clientOrder;
+	local bool /*-------------------------*/ allowCircularNavigation;
 
 	local xcb_font_t /*-------------------*/ font;
 
@@ -1304,6 +1227,10 @@ SOFTWARE. */
 	local uint32 /*-----------------------*/ titleBackground;
 
 	local uint /*-------------------------*/ titleTextCutoff;
+	local uint8 /*------------------------*/ selectedClient;
+	local uint8 /*------------------------*/ selectionAction;
+
+	local uint /*-------------------------*/ circleRadius; /*!*/
 
 
 
@@ -1316,16 +1243,13 @@ SOFTWARE. */
 	local uint8 /*------------------------*/ titleTextHorizontalAlignment; /*!*/
 	local uint8 /*------------------------*/ titleTextVerticalAlignment;   /*!*/
 
-	local uint8 /*------------------------*/ clientsShown;                /*!*/
+	local uint8 /*------------------------*/ clientsShown;                 /*!*/
 
-	local uint8 /*------------------------*/ selectedClient;              /*! none/first/last/focused */
+	local uint8 /*------------------------*/ horizontalSelectionOrder;     /*! none/left to right/right to left */
+	local uint8 /*------------------------*/ verticalSelectionOrder;       /*! none/up to down/down to up */
 
-	local uint8 /*------------------------*/ horizontalSelectionOrder;    /*! none/left to right/right to left */
-	local uint8 /*------------------------*/ verticalSelectionOrder;      /*! none/up to down/down to up */
-
-	local uint8 /*------------------------*/ selectionFit;                /*! how many selections fit in a row/column? N/A yet */
+	local uint8 /*------------------------*/ selectionFit;                 /*! how many selections fit in a row/column? N/A yet */
 	local uint /*-------------------------*/ selectionFitAmount = 4;
-	local uint8 /*------------------------*/ selectionAction;
 
 
 
@@ -1335,72 +1259,259 @@ SOFTWARE. */
 
 
 
-#define RANDRQUERYVERSIONUNCHECKED() /*---*/ local xcb_void_cookie_t  randrQueryVersionUnchecked(xcb_connection_t *const connection, const uint32 majorVersion, const uint32 minorVersion)
-#define FILLDRAWABLE() /*-----------------*/ local void               fillDrawable(const xcb_drawable_t drawable, const xcb_gcontext_t gc, const int16 x, const int16 y, const uint16 width, const uint16 height, const uint32 color)
-
-RANDRQUERYVERSIONUNCHECKED();
-FILLDRAWABLE();
-
-RANDRQUERYVERSIONUNCHECKED(){
-	xcb_void_cookie_t cookie;
-	cookie.sequence = xcb_randr_query_version_unchecked(connection, majorVersion, minorVersion).sequence;
-	ret cookie;
-}
-FILLDRAWABLE(){
-	xcb_rectangle_t rectangle;
-	rectangle.x = x;
-	rectangle.y = y;
-	rectangle.width = width;
-	rectangle.height = height;
-	xcb_change_gc(connection, gc, XCB_GC_FOREGROUND, &color);
-	xcb_poly_fill_rectangle(connection, drawable, gc, 1, &rectangle);
-	ret;
-}
-
-
-
-
-
-
-
-
-
-#define SETWINDOWPROPERTIES() /*----------*/ local void     setWindowProperties(const int x, const int y, const uint width, const uint height)
 #define CREATECLIENTLIST() /*-------------*/ local void     createClientList(uint *const listSize, Client **const listStart, uint32 *const listToken, const xcb_atom_t property)
 #define GETCLIENTTITLE() /*---------------*/ local bool     getClientTitle(const xcb_atom_t property, const xcb_atom_t type, Client *const client)
 #define COPYCLIENTTITLE() /*--------------*/ local bool     copyClientTitle(uint length, void *const valueStart, const xcb_atom_t property, Client *const client)
 #define FINDCLIENTLISTWINDOW() /*---------*/ local Client * findClientListWindow(const xcb_window_t window)
 #define FINDCLIENTLISTSTACKINGWINDOW() /*-*/ local Client * findClientListStackingWindow(const xcb_window_t window)
 #define SHOWWINDOW() /*-------------------*/ local void     showWindow(void)
+#define SETWINDOWPROPERTIES() /*----------*/ local void     setWindowProperties(const int x, const int y, const uint width, const uint height)
+#define DRAWWINDOW() /*-------------------*/ local void     drawWindow(ElementRectangle *windowRectangle)
+#define GETWINDOWRECTANGLE() /*-----------*/ local bool     getWindowRectangle(ElementRectangle *const rectangle)
+#define GETWINDOWELEMENTRECTANGLE() /*----*/ local void     getWindowElementRectangle(const ElementRectangle *const windowRectangle, const int elementX, const int elementY, const int elementXOffset, const int elementYOffset, const uint8 elementHorizontalAlignment, const uint8 elementVerticalAlignment, const int elementWidth, const int elementHeight, const uint8 elementWidthType, const uint8 elementHeightType, ElementRectangle *const rectangle)
 #define HIDEWINDOW() /*-------------------*/ local void     hideWindow(void)
-#define SELECTPREVIOUS() /*---------------*/ local void     selectPrevious(void)
-#define SELECTNEXT() /*-------------------*/ local void     selectNext(void)
-#define SELECTLEFT() /*-------------------*/ local void     selectLeft(void)
-#define SELECTRIGHT() /*------------------*/ local void     selectRight(void)
-#define SELECTABOVE() /*------------------*/ local void     selectAbove(void)
-#define SELECTBELOW() /*------------------*/ local void     selectBelow(void)
+#define SELECTPREVIOUSSELECTION() /*------*/ local void     selectPreviousSelection(void)
+#define SELECTNEXTSELECTION() /*----------*/ local void     selectNextSelection(void)
+#define SELECTLEFTSELECTION() /*----------*/ local void     selectLeftSelection(void)
+#define SELECTRIGHTSELECTION() /*---------*/ local void     selectRightSelection(void)
+#define SELECTABOVESELECTION() /*---------*/ local void     selectAboveSelection(void)
+#define SELECTBELOWSELECTION() /*---------*/ local void     selectBelowSelection(void)
 
-local int /*-*/ currentSelection;       /*! [-1, n), not sure if no selection will be implemented. currently 0% implemented. */
-local int /*-*/ selectionRowSize;       /*!*/
-local int /*-*/ maxSelectionRowSize;    /*!*/
-local int /*-*/ selectionColumnSize;    /*!*/
-local int /*-*/ maxSelectionColumnSize; /*!*/
+def struct{
+	int32 /*-----*/ x;
+	int32 /*-----*/ y;
+	uint32 /*----*/ width;
+	uint32 /*----*/ height;
+	Monitor * /*-*/ monitor;
+} ElementRectangle;
 
-SETWINDOWPROPERTIES();
 CREATECLIENTLIST();
 GETCLIENTTITLE();
 COPYCLIENTTITLE();
 FINDCLIENTLISTWINDOW();
 FINDCLIENTLISTSTACKINGWINDOW();
 SHOWWINDOW();
+SETWINDOWPROPERTIES();
+DRAWWINDOW();
+GETWINDOWRECTANGLE();
+GETWINDOWELEMENTRECTANGLE();
 HIDEWINDOW();
-SELECTPREVIOUS();
-SELECTNEXT();
-SELECTLEFT();
-SELECTRIGHT();
-SELECTABOVE();
-SELECTBELOW();
+SELECTPREVIOUSSELECTION();
+SELECTNEXTSELECTION();
+SELECTLEFTSELECTION();
+SELECTRIGHTSELECTION();
+SELECTABOVESELECTION();
+SELECTBELOWSELECTION();
 
+CREATECLIENTLIST(){
+	xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*screen).root, property, XCB_ATOM_WINDOW, 0, 0xFFFFFFFF), NULL);
+	uint32 token = pushPointer(reply, "createClientList() property reply", iFree);
+	if(reply){
+		const uint length = xcb_get_property_value_length(reply) / sizeof(xcb_window_t);
+		if(length){
+			const xcb_window_t *windowCurrent = xcb_get_property_value(reply);
+			const uint32 valueList = XCB_EVENT_MASK_PROPERTY_CHANGE;
+			Client *clientCurrent;
+			Client *clientWall;
+			if(*listStart){
+				const uint32 valueList = XCB_EVENT_MASK_NO_EVENT;
+				clientCurrent = *listStart;
+				clientWall = clientCurrent + *listSize;
+				jmp freeClientLoop;
+				freeClientLoop:{
+					if(clientCurrent < clientWall){
+						const xcb_window_t window = (*clientCurrent).window;
+						xcb_change_window_attributes_checked(connection, window, XCB_CW_EVENT_MASK, &valueList);
+						free((*clientCurrent).titleStart);
+						popPointer((*clientCurrent).titleToken);
+						inc clientCurrent;
+						jmp freeClientLoop;
+					}
+					free(*listStart);
+					popPointer(*listToken);
+				}
+			}
+			*listSize = length;
+			*listStart = malloc(*listSize * sizeof(Client));
+			*listToken = pushPointer(*listStart, "client list pointer", iFree);
+			clientCurrent = *listStart;
+			clientWall = clientCurrent + *listSize;
+			jmp addClientLoop;
+			addClientLoop:{
+				if(clientCurrent < clientWall){
+					const xcb_window_t window = *windowCurrent;
+					xcb_change_window_attributes_checked(connection, window, XCB_CW_EVENT_MASK, &valueList);
+					(*clientCurrent).titleStart = NULL;
+					(*clientCurrent).titleToken = 0;
+					(*clientCurrent).titleProperty = XCB_NONE;
+					(*clientCurrent).window = window;
+					if(!getClientTitle(atom._NET_WM_VISIBLE_NAME, atom.UTF8_STRING, clientCurrent)){
+						if(!getClientTitle(atom._NET_WM_NAME, atom.UTF8_STRING, clientCurrent)){
+							if(!getClientTitle(atom.WM_NAME, XCB_ATOM_STRING, clientCurrent)){
+								copyClientTitle(lengthof("untitled"), "untitled", XCB_NONE, clientCurrent);
+							}
+						}
+					}
+					inc windowCurrent;
+					inc clientCurrent;
+					jmp addClientLoop;
+				}
+			}
+		}
+		free(reply);
+		popPointer(token);
+	}
+	ret;
+}
+GETCLIENTTITLE(){
+	xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*client).window, property, type, 0, 0xFFFFFFFF), NULL);
+	uint32 token = pushPointer(reply, "getClientTitle() property reply", iFree);
+	if(reply){
+		const bool returnValue = copyClientTitle(xcb_get_property_value_length(reply), xcb_get_property_value(reply), property, client);
+		free(reply);
+		popPointer(token);
+		ret returnValue;
+	}
+	ret false;
+}
+COPYCLIENTTITLE(){
+	uint8 *titleStart;
+	uint32 titleToken;
+	if(!length){
+		ret false;
+	}
+	if(titleTextCutoff and length > titleTextCutoff){
+		length = titleTextCutoff;
+	}
+	titleStart = malloc((length + 1) * sizeof(uint8));
+	titleToken = pushPointer(titleStart, "window title pointer", iFree);
+	if(titleStart){
+		copyMemory(valueStart, titleStart, length);
+		if(titleTextCutoff){
+			fprintf(stdout, "if this is greater than 0 there is a bug: %u\n", titleTextCutoff);
+			if(property == atom._NET_WM_NAME or property == atom._NET_WM_VISIBLE_NAME){
+
+
+
+				/*!
+					this may break a utf8 char and make us print a fake one. even checking the length and equating it to 3 is wrong.
+
+					we need to make a function to recognize utf8 chars and remove them.
+				*/
+
+
+
+				if(length - 3 > titleTextCutoff){
+					*(titleStart + length - 3) = '.';
+					*(titleStart + length - 2) = '.';
+					*(titleStart + length - 1) = '.';
+				}
+
+
+
+			}else{
+				if(length - 3 > titleTextCutoff){
+					*(titleStart + length - 3) = '.';
+					*(titleStart + length - 2) = '.';
+					*(titleStart + length - 1) = '.';
+				}
+			}
+		}
+		*(titleStart + length) = '\0';
+		(*client).titleStart = titleStart;
+		(*client).titleToken = titleToken;
+		(*client).titleProperty = property;
+		ret true;
+	}
+	ret false;
+}
+FINDCLIENTLISTWINDOW(){
+	if(clientListSize){
+		Client *current = clientListStart;
+		Client *const wall = current + clientListSize;
+		jmp loop;
+		loop:{
+			if((*current).window == window){
+				ret current;
+			}
+			if(inc current < wall){
+				jmp loop;
+			}
+		}
+	}
+	ret NULL;
+}
+FINDCLIENTLISTSTACKINGWINDOW(){
+	if(clientListStackingSize){
+		Client *current = clientListStackingStart;
+		Client *const wall = current + clientListStackingSize;
+		jmp loop;
+		loop:{
+			if((*current).window == window){
+				ret current;
+			}
+			if(inc current < wall){
+				jmp loop;
+			}
+		}
+	}
+	ret NULL;
+}
+SHOWWINDOW(){
+	ElementRectangle rectangle;
+	if(!mapped and getWindowRectangle(&rectangle) and rectangle.width and rectangle.height){
+		const xcb_timestamp_t userTime = getTimestamp();
+		struct{
+			int32 /*--*/ x;
+			int32 /*--*/ y;
+			uint32 /*-*/ width;
+			uint32 /*-*/ height;
+			uint32 /*-*/ stackMode;
+		} valueList;
+		valueList.x = rectangle.x;
+		valueList.y = rectangle.y;
+		valueList.width = rectangle.width;
+		valueList.height = rectangle.height;
+		valueList.stackMode = XCB_STACK_MODE_ABOVE;
+		if(clientOrder){
+			switch selectedClient over
+				to FIRST_SELECTED_CLIENT: /*---*/ currentSelection = 0; /*---------------------------*/ brk;
+				to LAST_SELECTED_CLIENT: /*----*/ currentSelection = *selectedClientListSize - 1; /*-*/ brk;
+
+
+
+
+
+
+
+
+
+				/*!*/
+
+				to FOCUSED_SELECTED_CLIENT: /*-*/ currentSelection = 0; /*---------------------------*/ brk; /*! the focused (of the chosen client list?) */
+
+				/*!*/
+
+
+
+
+
+
+
+
+
+				off: /*------------------------*/ currentSelection = -1; /*--------------------------*/ brk;
+			end
+		}
+		xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &userTime);
+		xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_STACK_MODE, &valueList);
+		setWindowProperties(valueList.x, valueList.y, valueList.width, valueList.height);
+		drawWindow(&rectangle);
+		xcb_map_window(connection, window);
+		mapped = true;
+	}
+	ret;
+}
 SETWINDOWPROPERTIES(){
 	const uint32 desktop = 0xFFFFFFFF;
 	const pid_t pid = getpid();
@@ -1477,186 +1588,270 @@ SETWINDOWPROPERTIES(){
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_PID, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &pid);
 	ret;
 }
-CREATECLIENTLIST(){
-	xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*screen).root, property, XCB_ATOM_WINDOW, 0, 0xFFFFFFFF), NULL);
-	uint32 token = pushPointer(reply, "createClientList() property reply", iFree);
-	if(reply){
-		const uint length = xcb_get_property_value_length(reply) / sizeof(xcb_window_t);
-		if(length){
-			const xcb_window_t *windowCurrent = xcb_get_property_value(reply);
-			const uint32 valueList = XCB_EVENT_MASK_PROPERTY_CHANGE;
-			Client *clientCurrent;
-			Client *clientWall;
-			if(*listStart){
-				const uint32 valueList = XCB_EVENT_MASK_NO_EVENT;
-				clientCurrent = *listStart;
-				clientWall = clientCurrent + *listSize;
-				jmp freeClientLoop;
-				freeClientLoop:{
-					if(clientCurrent < clientWall){
-						const xcb_window_t window = (*clientCurrent).window;
-						xcb_change_window_attributes(connection, window, XCB_CW_EVENT_MASK, &valueList);
-						free((*clientCurrent).titleStart);
-						popPointer((*clientCurrent).titleToken);
-						inc clientCurrent;
-						jmp freeClientLoop;
-					}
-					free(*listStart);
-					popPointer(*listToken);
-				}
-			}
-			*listSize = length;
-			*listStart = malloc(*listSize * sizeof(Client));
-			*listToken = pushPointer(*listStart, "client list pointer", iFree);
-			clientCurrent = *listStart;
-			clientWall = clientCurrent + *listSize;
-			jmp addClientLoop;
-			addClientLoop:{
-				if(clientCurrent < clientWall){
-					const xcb_window_t window = *windowCurrent;
-					xcb_change_window_attributes(connection, window, XCB_CW_EVENT_MASK, &valueList);
-					(*clientCurrent).titleStart = NULL;
-					(*clientCurrent).titleToken = 0;
-					(*clientCurrent).titleProperty = XCB_NONE;
-					(*clientCurrent).window = window;
-					if(!getClientTitle(atom._NET_WM_NAME, atom.UTF8_STRING, clientCurrent)){
-						if(!getClientTitle(atom.WM_NAME, XCB_ATOM_STRING, clientCurrent)){
-							copyClientTitle(lengthof("untitled"), "untitled", XCB_NONE, clientCurrent);
-						}
-					}
-					inc windowCurrent;
-					inc clientCurrent;
-					jmp addClientLoop;
-				}
+DRAWWINDOW(){
+
+	/*!
+		margin : spacing between selections
+		padding: spacing between selection border and content MBR
+		gap    : spacing between contents
+	*/
+
+
+
+	/*!*/
+
+	uint localClientWidth;
+	uint localClientHeight;
+	uint localClientX;
+	uint localClientY;
+
+	uint localTitleWidth;
+	uint localTitleHeight;
+	uint localTitleX;
+	uint localTitleY;
+
+	uint localSelectionWidth;
+	uint localSelectionHeight;
+	uint localSelectionX;
+	uint localSelectionY;
+	uint localSelectionOffsetX;
+	uint localSelectionOffsetY;
+
+	/*!*/
+
+
+
+
+
+
+
+
+
+	ElementRectangle _windowRectangle;
+	ElementRectangle clientRectangle;
+	ElementRectangle titleRectangle;
+	jmp getRectangles;
+	getRectangles:{
+		if(!windowRectangle){
+			windowRectangle = &_windowRectangle;
+			if(!getWindowRectangle(windowRectangle) or !(*windowRectangle).width or !(*windowRectangle).height){
+				ret;
 			}
 		}
-		free(reply);
-		popPointer(token);
+		getWindowElementRectangle(windowRectangle, clientX, clientY, clientXOffset, clientYOffset, clientHorizontalAlignment, clientVerticalAlignment, clientWidth, clientHeight, clientWidthType, clientHeightType, &clientRectangle);
+		getWindowElementRectangle(windowRectangle, titleX, titleY, titleXOffset, titleYOffset, titleHorizontalAlignment, titleVerticalAlignment, titleWidth, titleHeight, titleWidthType, titleHeightType, &titleRectangle);
+		jmp calculate; /*! rename */
 	}
-	ret;
-}
-GETCLIENTTITLE(){
-	xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*client).window, property, type, 0, 0xFFFFFFFF), NULL);
-	uint32 token = pushPointer(reply, "getClientTitle() property reply", iFree);
-	if(reply){
-		const bool returnValue = copyClientTitle(xcb_get_property_value_length(reply), xcb_get_property_value(reply), property, client);
-		free(reply);
-		popPointer(token);
-		ret returnValue;
+	calculate:{
+
+
+
+
+
+
+
+
+
+		/*!*/
+
+		localClientWidth = clientRectangle.width;
+		localClientHeight = clientRectangle.height;
+		localClientX = selectionMargin + selectionPadding;
+		localClientY = selectionMargin + selectionPadding;
+
+		localTitleWidth = titleRectangle.width;
+		localTitleHeight = titleRectangle.height;
+		localTitleX = selectionMargin + selectionPadding;
+		localTitleY = localClientY + localClientHeight + selectionGap;
+
+		localSelectionWidth = (localClientWidth > localTitleWidth? localClientWidth : localTitleWidth) + 2 * selectionPadding;
+		localSelectionHeight = localClientHeight + selectionGap + localTitleHeight + 2 * selectionPadding;
+		localSelectionX = selectionMargin;
+		localSelectionY = selectionMargin;
+
+		localSelectionOffsetX = localSelectionWidth + selectionMargin;
+		localSelectionOffsetY = 0;
+
+		/*!*/
+
+
+
+
+
+
+
+
+
+		jmp drawWindow;
 	}
-	ret false;
-}
-COPYCLIENTTITLE(){
-	uint8 *titleStart;
-	uint32 titleToken;
-	if(!length){
-		ret false;
-	}
-	if(titleTextCutoff and length > titleTextCutoff){
-		length = titleTextCutoff;
-	}
-	titleStart = malloc((length + 1) * sizeof(uint8));
-	titleToken = pushPointer(titleStart, "window title pointer", iFree);
-	if(titleStart){
-		copyMemory(valueStart, titleStart, length);
-		if(property == atom._NET_WM_NAME){
-
-
-
-			/*!
-				this may break a utf8 char and make us print a fake one. even checking the length and equating it to 3 is wrong.
-
-				we need to make a function to recognize utf8 chars and remove them.
-			*/
-
-
-
-			if(length > 3){
-				*(titleStart + length - 3) = '.';
-				*(titleStart + length - 2) = '.';
-				*(titleStart + length - 1) = '.';
-			}
-
-
-
-		}else{
-			if(length > 3){
-				*(titleStart + length - 3) = '.';
-				*(titleStart + length - 2) = '.';
-				*(titleStart + length - 1) = '.';
-			}
+	drawWindow:{
+		fillDrawable(pixmap, gc, 0, 0, (*windowRectangle).width, (*windowRectangle).height, windowBackground);
+		xcb_copy_area(connection, circlePixmap, pixmap, gc, 0           , 0           , 0                                          , 0                                          , circleRadius + 1, circleRadius + 1);
+		xcb_copy_area(connection, circlePixmap, pixmap, gc, circleRadius, 0           , (*windowRectangle).width - circleRadius - 1, 0                                           , circleRadius + 1, circleRadius + 1);
+		xcb_copy_area(connection, circlePixmap, pixmap, gc, 0           , circleRadius, 0                                          , (*windowRectangle).height - circleRadius - 1, circleRadius + 1, circleRadius + 1);
+		xcb_copy_area(connection, circlePixmap, pixmap, gc, circleRadius, circleRadius, (*windowRectangle).width - circleRadius - 1, (*windowRectangle).height - circleRadius - 1, circleRadius + 1, circleRadius + 1);
+		if(clientOrder){
+			jmp drawSelections;
 		}
-		*(titleStart + length) = '\0';
-		(*client).titleStart = titleStart;
-		(*client).titleToken = titleToken;
-		(*client).titleProperty = property;
-		ret true;
+		jmp clearArea;
 	}
-	ret false;
-}
-FINDCLIENTLISTWINDOW(){
-	if(clientListSize){
+	drawSelections:{
 		Client *current = clientListStart;
 		Client *const wall = current + clientListSize;
-		jmp loop;
-		loop:{
-			if((*current).window == window){
-				ret current;
+
+
+
+
+
+
+
+
+
+		/*!*/
+
+		uint currentRowSelection = 0;
+
+		/*!*/
+
+
+
+
+
+
+
+
+
+		jmp drawSelectionLoop;
+		drawSelectionLoop:{
+			if(current < wall){
+				uint32 localSelectionBackground = selectionBackground;
+				if(current - clientListStart == currentSelection){
+					localSelectionBackground = selectedSelectionBackground;
+				}
+				fillDrawable(pixmap, gc, localSelectionX, localSelectionY, localSelectionWidth, localSelectionHeight, localSelectionBackground);
+				fillDrawable(pixmap, gc, localClientX   , localClientY   , localClientWidth   , localClientHeight   , clientBackground);
+				fillDrawable(pixmap, gc, localTitleX    , localTitleY    , localTitleWidth    , localTitleHeight    , titleBackground);
+				if(font){
+
+
+
+
+
+
+
+
+
+					/*!*/
+
+					/*! create, use and then delete a clip rectangle for the gc. */
+
+					uint16 ucs2[256];
+					uint length = UTF8ToUCS2((*current).titleStart, ucs2, countof(ucs2));
+					xcb_query_text_extents_reply_t *const reply = xcb_wait_for_reply(connection, xcb_query_text_extents_unchecked(connection, font, length, (void *)ucs2), NULL);
+					uint32 token = pushPointer(reply, "drawWindow() query text extents reply", iFree);
+					if(reply){
+						uint32 valueList[2];
+						*(valueList + 0) = titleForeground;
+						*(valueList + 1) = titleBackground;
+						/*! {
+							xcb_rectangle_t rectangle;
+							rectangle.x = localTitleX;
+							rectangle.y = localTitleY + (*reply).font_ascent;
+							rectangle.width = localTitleWidth;
+							rectangle.height = localTitleHeight;
+							xcb_set_clip_rectangles(connection, XCB_CLIP_ORDERING_UNSORTED, gc, localTitleX, localTitleY + (*reply).font_ascent, 1, &rectangle);
+						} */
+						xcb_change_gc(connection, gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, valueList);
+						xcb_image_text_16(connection, length, pixmap, gc, localTitleX, localTitleY + (*reply).font_ascent, (void *)ucs2);
+						/*! {
+							xcb_set_clip_rectangles(connection, XCB_CLIP_ORDERING_UNSORTED, gc, localTitleX, localTitleY + (*reply).font_ascent, 0, NULL);
+						} */
+						free(reply);
+						popPointer(token);
+					}
+
+					/*!*/
+
+
+
+
+
+
+
+
+
+				}
+
+
+
+
+
+
+
+
+
+				/*!*/
+
+				if(inc currentRowSelection == selectionFitAmount){
+					localSelectionX = selectionMargin;
+					localSelectionY += localSelectionHeight + selectionMargin;
+					localClientX = selectionMargin + selectionPadding;
+					localClientY += localSelectionHeight + selectionMargin;
+					localTitleX = selectionMargin + selectionPadding;
+					localTitleY += localSelectionHeight + selectionMargin;
+					currentRowSelection = 0;
+
+				/*!*/
+
+
+
+
+
+
+
+
+
+				}else{
+					localSelectionX += localSelectionOffsetX;
+					localSelectionY += localSelectionOffsetY;
+
+
+
+
+
+
+
+
+
+					/*!*/
+
+					localClientX = localSelectionX + selectionPadding;
+					localTitleX = localSelectionX + selectionPadding;
+
+					/*!*/
+
+
+
+
+
+
+
+
+
+				}
+				inc current;
+				jmp drawSelectionLoop;
 			}
-			if(inc current < wall){
-				jmp loop;
-			}
+			jmp clearArea;
 		}
 	}
-	ret NULL;
-}
-FINDCLIENTLISTSTACKINGWINDOW(){
-	if(clientListStackingSize){
-		Client *current = clientListStackingStart;
-		Client *const wall = current + clientListStackingSize;
-		jmp loop;
-		loop:{
-			if((*current).window == window){
-				ret current;
-			}
-			if(inc current < wall){
-				jmp loop;
-			}
+	clearArea:{
+		if(mapped){
+			xcb_clear_area(connection, false, window, 0, 0, 0, 0);
 		}
+		ret;
 	}
-	ret NULL;
 }
-
-
-
-
-
-
-
-
-
-/*!
-	remember that everything here is unoptimized.
-*/
-
-#define GETWINDOWRECTANGLE() /*----*/ local bool       getWindowRectangle(RectangleElement *const rectangle)
-#define GETCLIENTRECTANGLE() /*----*/ local bool       getClientRectangle(const RectangleElement *const windowRectangle, RectangleElement *const rectangle)
-#define GETTITLERECTANGLE() /*-----*/ local bool       getTitleRectangle(const RectangleElement *const windowRectangle, RectangleElement *const rectangle)
-#define DRAWWINDOW() /*------------*/ local void       drawWindow(void)
-
-def struct{
-	int32 /*-----*/ x;
-	int32 /*-----*/ y;
-	uint32 /*----*/ width;
-	uint32 /*----*/ height;
-	Monitor * /*-*/ monitor;
-} RectangleElement;
-
-GETWINDOWRECTANGLE();
-GETCLIENTRECTANGLE();
-GETTITLERECTANGLE();
-DRAWWINDOW();
-
 GETWINDOWRECTANGLE(){
 	Monitor *monitor;
 	int x;
@@ -1694,76 +1889,28 @@ GETWINDOWRECTANGLE(){
 		ret false;
 	}
 	switch windowWidthType over
-		to INTEGER_NUMBER_TYPE:{
-			width = windowWidth;
-			brk;
-		}
-		to PERCENTAGE_NUMBER_TYPE:{
-			width = (*monitor).w * windowWidth / 100;
-			brk;
-		}
-		to MILLIMETER_NUMBER_TYPE:{
-			width = (*monitor).w * windowWidth / (*monitor).millimeterWidth;
-			brk;
-		}
-		off:{
-			width = 0;
-			brk;
-		}
+		to INTEGER_NUMBER_TYPE: /*----*/ width = windowWidth; /*---------------------------------------------*/ brk;
+		to PERCENTAGE_NUMBER_TYPE: /*-*/ width = (*monitor).w * windowWidth / 100; /*------------------------*/ brk;
+		to MILLIMETER_NUMBER_TYPE: /*-*/ width = (*monitor).w * windowWidth / (*monitor).millimeterWidth; /*-*/ brk;
+		off: /*-----------------------*/ width = 0; /*-------------------------------------------------------*/ brk;
 	end
 	switch windowHeightType over
-		to INTEGER_NUMBER_TYPE:{
-			height = windowHeight;
-			brk;
-		}
-		to PERCENTAGE_NUMBER_TYPE:{
-			height = (*monitor).h * windowHeight / 100;
-			brk;
-		}
-		to MILLIMETER_NUMBER_TYPE:{
-			height = (*monitor).h * windowHeight / (*monitor).millimeterHeight;
-			brk;
-		}
-		off:{
-			height = 0;
-			brk;
-		}
+		to INTEGER_NUMBER_TYPE: /*----*/ height = windowHeight; /*----------------------------------------------*/ brk;
+		to PERCENTAGE_NUMBER_TYPE: /*-*/ height = (*monitor).h * windowHeight / 100; /*-------------------------*/ brk;
+		to MILLIMETER_NUMBER_TYPE: /*-*/ height = (*monitor).h * windowHeight / (*monitor).millimeterHeight; /*-*/ brk;
+		off: /*-----------------------*/ height = 0; /*---------------------------------------------------------*/ brk;
 	end
 	switch windowHorizontalAlignment over
-		to LEFT_HORIZONTAL_ALIGNMENT:{
-			x = (*monitor).leftX + windowXOffset;
-			brk;
-		}
-		to CENTER_HORIZONTAL_ALIGNMENT:{
-			x = (*monitor).leftX + ((*monitor).w - width) / 2 + windowXOffset;
-			brk;
-		}
-		to RIGHT_HORIZONTAL_ALIGNMENT:{
-			x = (*monitor).rightX - width + windowXOffset;
-			brk;
-		}
-		off:{
-			x = windowX + windowXOffset;
-			brk;
-		}
+		to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ x = (*monitor).leftX + windowXOffset; /*------------------------------*/ brk;
+		to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ x = (*monitor).leftX + ((*monitor).w - width) / 2 + windowXOffset; /*-*/ brk;
+		to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ x = (*monitor).rightX - width + windowXOffset; /*---------------------*/ brk;
+		off: /*----------------------------*/ x = windowX + windowXOffset; /*---------------------------------------*/ brk;
 	end
 	switch windowVerticalAlignment over
-		to TOP_VERTICAL_ALIGNMENT:{
-			y = (*monitor).topY + windowYOffset;
-			brk;
-		}
-		to CENTER_VERTICAL_ALIGNMENT:{
-			y = (*monitor).topY + ((*monitor).h - height) / 2 + windowYOffset;
-			brk;
-		}
-		to BOTTOM_VERTICAL_ALIGNMENT:{
-			y = (*monitor).bottomY - height + windowYOffset;
-			brk;
-		}
-		off:{
-			y = windowY + windowYOffset;
-			brk;
-		}
+		to TOP_VERTICAL_ALIGNMENT: /*----*/ y = (*monitor).topY + windowYOffset; /*-------------------------------*/ brk;
+		to CENTER_VERTICAL_ALIGNMENT: /*-*/ y = (*monitor).topY + ((*monitor).h - height) / 2 + windowYOffset; /*-*/ brk;
+		to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ y = (*monitor).bottomY - height + windowYOffset; /*-------------------*/ brk;
+		off: /*--------------------------*/ y = windowY + windowYOffset; /*---------------------------------------*/ brk;
 	end
 	(*rectangle).x = x;
 	(*rectangle).y = y;
@@ -1772,353 +1919,50 @@ GETWINDOWRECTANGLE(){
 	(*rectangle).monitor = monitor;
 	ret true;
 }
-GETCLIENTRECTANGLE(){
+GETWINDOWELEMENTRECTANGLE(){
 	const Monitor *const monitor = (*windowRectangle).monitor;
 	int x;
 	int y;
 	uint width;
 	uint height;
-	switch clientWidthType over
-		to INTEGER_NUMBER_TYPE:{
-			width = clientWidth;
-			brk;
-		}
-		to PERCENTAGE_NUMBER_TYPE:{
-			width = (*windowRectangle).width * clientWidth / 100;
-			brk;
-		}
-		to MILLIMETER_NUMBER_TYPE:{
-			width = (*monitor).w * clientWidth / (*monitor).millimeterWidth;
-			brk;
-		}
-		off:{
-			width = 0;
-			brk;
-		}
+	switch elementWidthType over
+		to INTEGER_NUMBER_TYPE: /*----*/ width = elementWidth; /*---------------------------------------------*/ brk;
+		to PERCENTAGE_NUMBER_TYPE: /*-*/ width = (*windowRectangle).width * elementWidth / 100; /*------------*/ brk;
+		to MILLIMETER_NUMBER_TYPE: /*-*/ width = (*monitor).w * elementWidth / (*monitor).millimeterWidth; /*-*/ brk;
+		off: /*-----------------------*/ width = 0; /*--------------------------------------------------------*/ brk;
 	end
-	switch clientHeightType over
-		to INTEGER_NUMBER_TYPE:{
-			height = clientHeight;
-			brk;
-		}
-		to PERCENTAGE_NUMBER_TYPE:{
-			height = (*windowRectangle).height * clientHeight / 100;
-			brk;
-		}
-		to MILLIMETER_NUMBER_TYPE:{
-			height = (*monitor).h * clientHeight / (*monitor).millimeterHeight;
-			brk;
-		}
-		off:{
-			height = 0;
-			brk;
-		}
+	switch elementHeightType over
+		to INTEGER_NUMBER_TYPE: /*----*/ height = elementHeight; /*----------------------------------------------*/ brk;
+		to PERCENTAGE_NUMBER_TYPE: /*-*/ height = (*windowRectangle).height * elementHeight / 100; /*------------*/ brk;
+		to MILLIMETER_NUMBER_TYPE: /*-*/ height = (*monitor).h * elementHeight / (*monitor).millimeterHeight; /*-*/ brk;
+		off: /*-----------------------*/ height = 0; /*----------------------------------------------------------*/ brk;
 	end
-	switch clientHorizontalAlignment over
-		to LEFT_HORIZONTAL_ALIGNMENT:{
-			x = clientXOffset;
-			brk;
-		}
-		to CENTER_HORIZONTAL_ALIGNMENT:{
-			x = ((*windowRectangle).width - width) / 2 + clientXOffset;
-			brk;
-		}
-		to RIGHT_HORIZONTAL_ALIGNMENT:{
-			x = (*windowRectangle).width - width + clientXOffset;
-			brk;
-		}
-		off:{
-			x = clientX + clientXOffset;
-			brk;
-		}
+	switch elementHorizontalAlignment over
+		to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ x = elementXOffset; /*------------------------------------------*/ brk;
+		to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ x = ((*windowRectangle).width - width) / 2 + elementXOffset; /*-*/ brk;
+		to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ x = (*windowRectangle).width - width + elementXOffset; /*-------*/ brk;
+		off: /*----------------------------*/ x = elementX + elementXOffset; /*-------------------------------*/ brk;
 	end
-	switch clientVerticalAlignment over
-		to TOP_VERTICAL_ALIGNMENT:{
-			y = clientYOffset;
-			brk;
-		}
-		to CENTER_VERTICAL_ALIGNMENT:{
-			y = ((*windowRectangle).height - height) / 2 + clientYOffset;
-			brk;
-		}
-		to BOTTOM_VERTICAL_ALIGNMENT:{
-			y = (*windowRectangle).height - height + clientYOffset;
-			brk;
-		}
-		off:{
-			y = clientY + clientYOffset;
-			brk;
-		}
+	switch elementVerticalAlignment over
+		to TOP_VERTICAL_ALIGNMENT: /*----*/ y = elementYOffset; /*--------------------------------------------*/ brk;
+		to CENTER_VERTICAL_ALIGNMENT: /*-*/ y = ((*windowRectangle).height - height) / 2 + elementYOffset; /*-*/ brk;
+		to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ y = (*windowRectangle).height - height + elementYOffset; /*-------*/ brk;
+		off: /*--------------------------*/ y = elementY + elementYOffset; /*---------------------------------*/ brk;
 	end
 	(*rectangle).x = x;
 	(*rectangle).y = y;
 	(*rectangle).width = width;
 	(*rectangle).height = height;
-	ret true;
-}
-GETTITLERECTANGLE(){
-	const Monitor *const monitor = (*windowRectangle).monitor;
-	int x;
-	int y;
-	uint width;
-	uint height;
-	switch titleWidthType over
-		to INTEGER_NUMBER_TYPE:{
-			width = titleWidth;
-			brk;
-		}
-		to PERCENTAGE_NUMBER_TYPE:{
-			width = (*windowRectangle).width * titleWidth / 100;
-			brk;
-		}
-		to MILLIMETER_NUMBER_TYPE:{
-			width = (*monitor).w * titleWidth / (*monitor).millimeterWidth;
-			brk;
-		}
-		off:{
-			width = 0;
-			brk;
-		}
-	end
-	switch titleHeightType over
-		to INTEGER_NUMBER_TYPE:{
-			height = titleHeight;
-			brk;
-		}
-		to PERCENTAGE_NUMBER_TYPE:{
-			height = (*windowRectangle).height * titleHeight / 100;
-			brk;
-		}
-		to MILLIMETER_NUMBER_TYPE:{
-			height = (*monitor).h * titleHeight / (*monitor).millimeterHeight;
-			brk;
-		}
-		off:{
-			height = 0;
-			brk;
-		}
-	end
-	switch titleHorizontalAlignment over
-		to LEFT_HORIZONTAL_ALIGNMENT:{
-			x = titleXOffset;
-			brk;
-		}
-		to CENTER_HORIZONTAL_ALIGNMENT:{
-			x = ((*windowRectangle).width - width) / 2 + titleXOffset;
-			brk;
-		}
-		to RIGHT_HORIZONTAL_ALIGNMENT:{
-			x = (*windowRectangle).width - width + titleXOffset;
-			brk;
-		}
-		off:{
-			x = titleX + titleXOffset;
-			brk;
-		}
-	end
-	switch titleVerticalAlignment over
-		to TOP_VERTICAL_ALIGNMENT:{
-			y = titleYOffset;
-			brk;
-		}
-		to CENTER_VERTICAL_ALIGNMENT:{
-			y = ((*windowRectangle).height - height) / 2 + titleYOffset;
-			brk;
-		}
-		to BOTTOM_VERTICAL_ALIGNMENT:{
-			y = (*windowRectangle).height - height + titleYOffset;
-			brk;
-		}
-		off:{
-			y = titleY + titleYOffset;
-			brk;
-		}
-	end
-	(*rectangle).x = x;
-	(*rectangle).y = y;
-	(*rectangle).width = width;
-	(*rectangle).height = height;
-	ret true;
-}
-DRAWWINDOW(){
-
-	/*!
-		margin : spacing between selections
-		padding: spacing between selection border and content MBR
-		gap    : spacing between contents
-	*/
-
-	/*!
-		what are the fail states that should be considered before getting in here?
-			window width is 0
-			window height is 0
-	*/
-
-
-
-	RectangleElement windowRectangle;
-	RectangleElement clientRectangle;
-	RectangleElement titleRectangle;
-	if(!getWindowRectangle(&windowRectangle)){
-		ret;
-	}
-	fprintf(stdout, "window: %i %i %u %u\n", windowRectangle.x, windowRectangle.y, windowRectangle.width, windowRectangle.height);
-	if(!windowRectangle.width or !windowRectangle.height){
-		ret;
-	}
-	if(getClientRectangle(&windowRectangle, &clientRectangle)){
-		fprintf(stdout, "client: %i %i %u %u\n", clientRectangle.x, clientRectangle.y, clientRectangle.width, clientRectangle.height);
-	}
-	if(getTitleRectangle(&windowRectangle, &titleRectangle)){
-		fprintf(stdout, "title : %i %i %u %u\n", titleRectangle.x, titleRectangle.y, titleRectangle.width, titleRectangle.height);
-	}
-	{
-		uint localWindowWidth = windowRectangle.width;
-		uint localWindowHeight = windowRectangle.height;
-
-
-
-
-
-
-
-
-
-		/*!*/
-
-		uint localClientWidth = clientRectangle.width;
-		uint localClientHeight = clientRectangle.height;
-		uint localClientX = selectionMargin + selectionPadding;
-		uint localClientY = selectionMargin + selectionPadding;
-
-		uint localTitleWidth = titleRectangle.width;
-		uint localTitleHeight = titleRectangle.height;
-		uint localTitleX = selectionMargin + selectionPadding;
-		uint localTitleY = localClientY + localClientHeight + selectionGap;
-
-		uint localSelectionWidth = (localClientWidth > localTitleWidth? localClientWidth : localTitleWidth) + 2 * selectionPadding;
-		uint localSelectionHeight = localClientHeight + selectionGap + localTitleHeight + 2 * selectionPadding;
-		uint localSelectionX = selectionMargin;
-		uint localSelectionY = selectionMargin;
-
-		/*!*/
-
-
-
-
-
-
-
-
-		jmp drawWindow;
-		drawWindow:{
-			Client *current = clientListStart;
-			Client *const wall = current + clientListSize;
-			uint currentSelection = 0;
-			fillDrawable(pixmap, gc, 0, 0, localWindowWidth, localWindowHeight, windowBackground);
-			jmp drawSelectionLoop;
-			drawSelectionLoop:{
-				if(current < wall){
-					fillDrawable(pixmap, gc, localSelectionX, localSelectionY, localSelectionWidth, localSelectionHeight, selectionBackground);
-					fillDrawable(pixmap, gc, localClientX   , localClientY   , localClientWidth   , localClientHeight   , clientBackground);
-					fillDrawable(pixmap, gc, localTitleX    , localTitleY    , localTitleWidth    , localTitleHeight    , titleBackground);
-					if(font){
-
-
-
-						uint16 ucs2[256];
-						uint length = UTF8ToUCS2((*current).titleStart, ucs2, countof(ucs2));
-						xcb_query_text_extents_reply_t *const reply = xcb_wait_for_reply(connection, xcb_query_text_extents_unchecked(connection, font, length, (void *)ucs2), NULL);
-						uint32 token = pushPointer(reply, "drawWindow() query text extents reply", iFree);
-						if(reply){
-							uint32 valueList[2];
-							*(valueList + 0) = titleForeground;
-							*(valueList + 1) = titleBackground;
-							xcb_change_gc(connection, gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, valueList);
-							xcb_image_text_16(connection, length, pixmap, gc, localTitleX, localTitleY + (*reply).font_ascent, (void *)ucs2);
-							free(reply);
-							popPointer(token);
-						}
-
-
-
-					}
-					if(inc currentSelection == selectionFitAmount){
-						localSelectionX = selectionMargin;
-						localSelectionY += localSelectionHeight + selectionMargin;
-						localClientX = selectionMargin + selectionPadding;
-						localClientY += localSelectionHeight + selectionMargin;
-						localTitleX = selectionMargin + selectionPadding;
-						localTitleY += localSelectionHeight + selectionMargin;
-						currentSelection = 0;
-					}else{
-						localSelectionX += localSelectionWidth + selectionMargin;
-						localClientX = localSelectionX + selectionPadding;
-						localTitleX = localSelectionX + selectionPadding;
-					}
-					inc current;
-					jmp drawSelectionLoop;
-				}
-			}
-			if(mapped){
-				xcb_clear_area(connection, false, window, 0, 0, 0, 0);
-			}
-			ret;
-		}
-	}
-}
-
-
-
-
-
-
-
-
-
-SHOWWINDOW(){
-	if(!mapped){
-		RectangleElement rectangle;
-		struct{
-			int32 /*--*/ x;
-			int32 /*--*/ y;
-			uint32 /*-*/ width;
-			uint32 /*-*/ height;
-			uint32 /*-*/ stackMode;
-		} valueList;
-		if(!getWindowRectangle(&rectangle)){
-			ret;
-		}
-		valueList.x = rectangle.x;
-		valueList.y = rectangle.y;
-		valueList.width = rectangle.width;
-		valueList.height = rectangle.height;
-		valueList.stackMode = XCB_STACK_MODE_ABOVE;
-		if(valueList.width and valueList.height){
-			const xcb_timestamp_t userTime = getTimestamp();
-			xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_STACK_MODE, &valueList);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &userTime);
-			drawWindow();
-			setWindowProperties(valueList.x, valueList.y, valueList.width, valueList.height);
-			xcb_map_window(connection, window);
-		}
-	}
 	ret;
 }
 HIDEWINDOW(){
 	xcb_window_t selectedWindow;
-
-
-
-	currentSelection = 0; /*!*/
-
-
-
 	if(!mapped){
 		ret;
 	}
 	selectedWindow = (*(clientListStart + currentSelection)).window;
 	xcb_unmap_window(connection, window);
+	mapped = false;
 	switch selectionAction over
 		to FOCUS_WINDOW_SELECTION_ACTION:{
 			xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, selectedWindow, atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, 0, 1), NULL);
@@ -2151,47 +1995,58 @@ HIDEWINDOW(){
 		}
 	end
 }
-
-
-
-/*!
-	all these require more work to handle specifically either list of list stacking.
-*/
-
-
-
-SELECTPREVIOUS(){
+SELECTPREVIOUSSELECTION(){
+	if(!clientOrder){
+		ret;
+	}
 	if(currentSelection > 0){
 		dec currentSelection;
-		ret;
+		jmp updateWindow;
 	}
-	if(allowCircularNavigation){
-		currentSelection = clientListSize - 1;
-		ret;
+	if(currentSelection == -1 or allowCircularNavigation){
+		currentSelection = *selectedClientListSize - 1;
+		jmp updateWindow;
 	}
 	ret;
+	updateWindow:{
+		if(mapped){
+			drawWindow(NULL);
+		}
+		ret;
+	}
 }
-SELECTNEXT(){
-	if(currentSelection < clientListSize - 1){
+SELECTNEXTSELECTION(){
+	if(!clientOrder){
+		ret;
+	}
+	if(currentSelection < (int)*selectedClientListSize - 1){
 		inc currentSelection;
-		ret;
+		jmp updateWindow;
 	}
-	if(allowCircularNavigation){
+	if(currentSelection == -1 or allowCircularNavigation){
 		currentSelection = 0;
-		ret;
+		jmp updateWindow;
 	}
 	ret;
+	updateWindow:{
+		if(mapped){
+			drawWindow(NULL);
+		}
+		ret;
+	}
 }
+SELECTLEFTSELECTION(){
 
 
 
-/*!
-	the orders could probably be baked into the order of clients instead.
-*/
+	/*!
+		these next four are gonna be trouble.
+
+		the orders could probably be baked into the order of clients instead.
+	*/
 
 
 
-SELECTLEFT(){
 #ifdef a
 	switch horizontalSelectionOrder over
 		to LEFT_TO_RIGHT_HORIZONTAL_SELECTION_ORDER:{
@@ -2223,7 +2078,7 @@ SELECTLEFT(){
 	end
 #endif
 }
-SELECTRIGHT(){
+SELECTRIGHTSELECTION(){
 #ifdef a
 	switch horizontalSelectionOrder over
 		to LEFT_TO_RIGHT_HORIZONTAL_SELECTION_ORDER:{
@@ -2252,7 +2107,7 @@ SELECTRIGHT(){
 	end
 #endif
 }
-SELECTABOVE(){
+SELECTABOVESELECTION(){
 #ifdef a
 	switch verticalSelectionOrder over
 		to UP_TO_DOWN_VERTICAL_SELECTION_ORDER:{
@@ -2284,7 +2139,7 @@ SELECTABOVE(){
 	end
 #endif
 }
-SELECTBELOW(){
+SELECTBELOWSELECTION(){
 #ifdef a
 	switch verticalSelectionOrder over
 		to UP_TO_DOWN_VERTICAL_SELECTION_ORDER:{
@@ -2346,6 +2201,38 @@ SELECTBELOW(){
 
 
 
+#define RANDRQUERYVERSIONUNCHECKED() /*--*/ local xcb_void_cookie_t  randrQueryVersionUnchecked(xcb_connection_t *const connection, const uint32 majorVersion, const uint32 minorVersion)
+#define RENDERQUERYVERSIONUNCHECKED() /*-*/ local xcb_void_cookie_t  renderQueryVersionUnchecked(xcb_connection_t *const connection, const uint32 majorVersion, const uint32 minorVersion)
+
+RANDRQUERYVERSIONUNCHECKED();
+RENDERQUERYVERSIONUNCHECKED();
+
+RANDRQUERYVERSIONUNCHECKED(){
+	xcb_void_cookie_t cookie;
+	cookie.sequence = xcb_randr_query_version_unchecked(connection, majorVersion, minorVersion).sequence;
+	ret cookie;
+}
+RENDERQUERYVERSIONUNCHECKED(){
+	xcb_void_cookie_t cookie;
+	cookie.sequence = xcb_render_query_version_unchecked(connection, majorVersion, minorVersion).sequence;
+	ret cookie;
+}
+
+/*!
+	render:
+		 0 events
+		 4 errors
+		37 operations
+*/
+
+
+
+
+
+
+
+
+
 int main(int argumentAmount, const char *const *argument){
 	(void)setMemory;
 	(void)copyMemory;
@@ -2380,48 +2267,51 @@ int main(int argumentAmount, const char *const *argument){
 		jmp setGlobals;
 	}
 	setGlobals:{
-		programName /*-------------*/ = *argument;
-		localeName /*--------------*/ = setlocale(LC_ALL, "");
-		configPath /*--------------*/ = NULL;
-		errorPath /*---------------*/ = NULL;
-		connectionName /*----------*/ = NULL;
-		colorStart /*--------------*/ = MESSAGE_START;
-		colorFatal /*--------------*/ = MESSAGE_FATAL;
-		colorError /*--------------*/ = MESSAGE_ERROR;
-		colorEvent /*--------------*/ = MESSAGE_EVENT;
-		colorEnd /*----------------*/ = MESSAGE_END;
-		mustOpenErrorStream /*-----*/ = false;
-		errorStream /*-------------*/ = DEFAULT_ERROR_STREAM;
-		errorStreamToken /*--------*/ = 0;
-		quitting /*----------------*/ = false;
-		connection /*--------------*/ = NULL;
-		connectionToken /*---------*/ = 0;
-		monitorStart /*------------*/ = NULL;
-		monitorToken /*------------*/ = 0;
-		keyPressNextOffset /*------*/ = 0;
-		keyReleaseNextOffset /*----*/ = 0;
-		buttonPressNextOffset /*---*/ = 0;
-		buttonReleaseNextOffset /*-*/ = 0;
-		event /*-------------------*/ = NULL;
-		eventToken /*--------------*/ = 0;
+		programName /*---------------*/ = *argument;
+		localeName /*----------------*/ = setlocale(LC_ALL, "");
+		configPath /*----------------*/ = NULL;
+		errorPath /*-----------------*/ = NULL;
+		connectionName /*------------*/ = NULL;
+		colorStart /*----------------*/ = MESSAGE_START;
+		colorFatal /*----------------*/ = MESSAGE_FATAL;
+		colorError /*----------------*/ = MESSAGE_ERROR;
+		colorEvent /*----------------*/ = MESSAGE_EVENT;
+		colorEnd /*------------------*/ = MESSAGE_END;
+		mustOpenErrorStream /*-------*/ = false;
+		errorStream /*---------------*/ = DEFAULT_ERROR_STREAM;
+		errorStreamToken /*----------*/ = 0;
+		quitting /*------------------*/ = false;
+		connection /*----------------*/ = NULL;
+		connectionToken /*-----------*/ = 0;
+		monitorStart /*--------------*/ = NULL;
+		monitorToken /*--------------*/ = 0;
+		keyPressNextOffset /*--------*/ = 0;
+		keyReleaseNextOffset /*------*/ = 0;
+		buttonPressNextOffset /*-----*/ = 0;
+		buttonReleaseNextOffset /*---*/ = 0;
+		event /*---------------------*/ = NULL;
+		eventToken /*----------------*/ = 0;
+		shortcutCode /*--------------*/ = 0;
+		shortcutModifier /*----------*/ = XCB_NONE;
+		expectingSecondKeyRelease /*-*/ = false;
 
 
 
-		pixmap /*------------------*/ = XCB_NONE;
-		gc /*----------------------*/ = XCB_NONE;
+		pixmap /*--------------------*/ = XCB_NONE;
+		gc /*------------------------*/ = XCB_NONE;
 
 
 
-		mapped /*------------------*/ = false;
+		mapped /*--------------------*/ = false;
 
 
 
-		clientListSize /*----------*/ = 0;
-		clientListStart /*---------*/ = NULL;
-		clientListToken /*---------*/ = 0;
-		clientListStackingSize /*--*/ = 0;
-		clientListStackingStart /*-*/ = NULL;
-		clientListStackingToken /*-*/ = 0;
+		clientListSize /*------------*/ = 0;
+		clientListStart /*-----------*/ = NULL;
+		clientListToken /*-----------*/ = 0;
+		clientListStackingSize /*----*/ = 0;
+		clientListStackingStart /*---*/ = NULL;
+		clientListStackingToken /*---*/ = 0;
 
 
 
@@ -2445,6 +2335,7 @@ int main(int argumentAmount, const char *const *argument){
 		setStringRoot(&horizontalAlignmentRoot);
 		setStringRoot(&verticalAlignmentRoot);
 		setStringRoot(&selectionActionRoot);
+		setStringRoot(&selectedClientRoot);
 
 
 
@@ -2466,7 +2357,7 @@ int main(int argumentAmount, const char *const *argument){
 				printTitledError("pthread error", "could not destroy global lock attributes");
 			}
 		}
-		processingSignal /*-----*/ = false;
+		processingSignal = false;
 		jmp getProgramArguments;
 	}
 	getProgramArguments:{
@@ -2687,22 +2578,29 @@ int main(int argumentAmount, const char *const *argument){
 		jmp checkExtensionAvailability;
 	}
 	checkExtensionAvailability:{
-		#define STRING(f) /*-----*/ { \
+		#define STRING(f) /*--------*/ { \
 			  f("RANDR") \
+			, f("RENDER") \
 		}
-		#define BASE_POINTER /*--*/ { \
+		#define BASE_POINTER /*-----*/ { \
 			  &randrMajorOpcode \
 			, &randrBaseEvent \
 			, &randrBaseError \
+			, &renderMajorOpcode \
+			, &renderBaseEvent \
+			, &renderBaseError \
 		}
 		#define VERSION_FUNCTION /*-*/ { \
 			  &randrQueryVersionUnchecked \
+			, &renderQueryVersionUnchecked \
 		}
-		#define MAJOR_VERSION /*-*/ { \
+		#define MAJOR_VERSION /*----*/ { \
 			  XCB_RANDR_MAJOR_VERSION \
+			, XCB_RENDER_MAJOR_VERSION \
 		}
-		#define MINOR_VERSION /*-*/ { \
+		#define MINOR_VERSION /*----*/ { \
 			  XCB_RANDR_MINOR_VERSION \
+			, XCB_RENDER_MINOR_VERSION \
 		}
 		char *nameStart[] = STRING(SELF);
 		uint lengthStart[] = STRING(lengthof);
@@ -3085,23 +2983,27 @@ int main(int argumentAmount, const char *const *argument){
 				(*monitorCurrent).h = h;
 				outputCurrent = xcb_randr_monitor_info_outputs(data);
 				outputWall = outputCurrent + xcb_randr_monitor_info_outputs_length(data);
-				if(outputCurrent < outputWall){
-					xcb_randr_get_output_info_reply_t *const reply = xcb_wait_for_reply(connection, xcb_randr_get_output_info_unchecked(connection, *outputCurrent, getTimestamp()), NULL);
-					uint32 token = pushPointer(reply, "get output info reply", iFree);
-					if(reply){
-						if((*reply).connection == XCB_RANDR_CONNECTION_CONNECTED){
-							(*monitorCurrent).millimeterWidth = (*reply).mm_width;
-							(*monitorCurrent).millimeterHeight = (*reply).mm_height;
-							outputCurrent = outputWall;
+				jmp getOutputMillimeterSizeLoop;
+				getOutputMillimeterSizeLoop:{
+					if(outputCurrent < outputWall){
+						xcb_randr_get_output_info_reply_t *const reply = xcb_wait_for_reply(connection, xcb_randr_get_output_info_unchecked(connection, *outputCurrent, getTimestamp()), NULL);
+						uint32 token = pushPointer(reply, "get output info reply", iFree);
+						if(reply){
+							if((*reply).connection == XCB_RANDR_CONNECTION_CONNECTED){
+								(*monitorCurrent).millimeterWidth = (*reply).mm_width;
+								(*monitorCurrent).millimeterHeight = (*reply).mm_height;
+								outputCurrent = outputWall;
+							}
+							free(reply);
+							popPointer(token);
 						}
-						free(reply);
-						popPointer(token);
+						inc outputCurrent;
+						jmp getOutputMillimeterSizeLoop;
 					}
-					inc outputCurrent;
+					xcb_randr_monitor_info_next(&iterator);
+					inc monitorCurrent;
+					jmp storeMonitorLoop;
 				}
-				xcb_randr_monitor_info_next(&iterator);
-				inc monitorCurrent;
-				jmp storeMonitorLoop;
 			}
 			free(reply);
 			popPointer(replyToken);
@@ -3124,8 +3026,68 @@ int main(int argumentAmount, const char *const *argument){
 		if(event){
 			jmp eventLoop;
 		}
+		jmp getThings;
+	}
+
+
+
+
+
+
+
+
+
+	/*! where do these get placed? is it standard? if not, make it. */
+
+	getThings:{
+
+
+
+		/*! starting */
+			circleRadius = 0;
+			circlePixmap = XCB_NONE;
+
+
+
+		/*! config */
+			circleRadius = 20;
+
+			/*! use the right color here and update whenever */
+			{
+				Image image;
+				if(createCircle(circleRadius, 0xFF171717, &image)){
+					if(circlePixmap){
+						xcb_free_pixmap(connection, circlePixmap);
+					}
+					circlePixmap = xcb_generate_id(connection);
+					xcb_create_pixmap(connection, depth, circlePixmap, window, image.width, image.height);
+					xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, circlePixmap, gc, image.width, image.height, 0, 0, 0, depth, image.size, image.data);
+					free(image.data);
+					popPointer(image.dataToken);
+				}
+			}
+
+
+
+
+
+
+
+
+
+		createClientList(&clientListSize, &clientListStart, &clientListToken, atom._NET_CLIENT_LIST);
+		createClientList(&clientListStackingSize, &clientListStackingStart, &clientListStackingToken, atom._NET_CLIENT_LIST_STACKING);
 		jmp preReadConfig;
 	}
+
+
+
+
+
+
+
+
+
 	preReadConfig:{
 		bulkInsertString(&globalScopesInstructionRoot, globalScopesInstructionList);
 		bulkInsertString(&globalInstructionRoot, globalInstructionList);
@@ -3144,6 +3106,7 @@ int main(int argumentAmount, const char *const *argument){
 		bulkInsertString(&horizontalAlignmentRoot, horizontalAlignmentList);
 		bulkInsertString(&verticalAlignmentRoot, verticalAlignmentList);
 		bulkInsertString(&selectionActionRoot, selectionActionList);
+		bulkInsertString(&selectedClientRoot, selectedClientList);
 
 
 
@@ -3160,33 +3123,8 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
-		jmp getThings;
-	}
-
-
-
-
-
-
-
-
-
-	/*! where do these get placed? is it standard? if not, make it. */
-
-	getThings:{
-		createClientList(&clientListSize, &clientListStart, &clientListToken, atom._NET_CLIENT_LIST);
-		createClientList(&clientListStackingSize, &clientListStackingStart, &clientListStackingToken, atom._NET_CLIENT_LIST_STACKING);
 		jmp eventLoopCheckShortcuts;
 	}
-
-
-
-
-
-
-
-
-
 	eventLoopCheckShortcuts:{
 		if(keyPressNextOffset){
 			jmp keyPressEvent;
@@ -3277,39 +3215,42 @@ int main(int argumentAmount, const char *const *argument){
 		if(getNextShortcut(&keycodeShortcut, (*e).detail, (*e).state, &keyPressNextOffset)){
 			jmp switchCommandDown;
 		}
+		shortcutCode = 0;
+		shortcutModifier = XCB_NONE;
+		expectingSecondKeyRelease = false;
 		jmp eventLoop;
 		#undef  e
 	}
-
-
-
-	/*!
-		suppose i press a key with a modifier, i then release the modifier and then i release the key:
-
-		even though the detail key is definitively released, the window is still mapped.
-
-		the problem is then on the shortcut lookup mechanism in getNextShortcut(). for it to work properly, we need to pass the appropriate modifier with the detail.
-
-		the rest of the code can remain as a custom way to lookup keys and modifiers and decide on what counts as release, even though it's useless right now.
-	*/
-
-
-
 	keyReleaseEvent:{
 		#define e /*-*/ ((xcb_key_release_event_t *)event)
-		if(!keyReleaseNextOffset){
-			xcb_query_keymap_reply_t *const reply = xcb_wait_for_reply(connection, xcb_query_keymap_unchecked(connection), NULL);
-			uint32 token = pushPointer(reply, "query keymap reply", iFree);
-			if(reply){
-				const bool isPressed = !!(*((*reply).keys + (*e).detail / 8) & (1 << (*e).detail % 8));
-				free(reply);
-				popPointer(token);
-				if(isPressed){
-					jmp eventLoop;
+		uint8 keycode = (*e).detail;
+		uint16 modifier = (*e).state;
+		if(keycode == shortcutCode and modifier == shortcutModifier){
+			if(!keyReleaseNextOffset){
+				xcb_query_keymap_reply_t *const reply = xcb_wait_for_reply(connection, xcb_query_keymap_unchecked(connection), NULL);
+				uint32 token = pushPointer(reply, "query keymap reply", iFree);
+				if(reply){
+					const bool isPressed = !!(*((*reply).keys + keycode / 8) & (1 << keycode % 8));
+					free(reply);
+					popPointer(token);
+					if(isPressed){
+						jmp eventLoop;
+					}
 				}
 			}
+		}elif(keycode != shortcutCode and modifier == shortcutModifier){
+			expectingSecondKeyRelease = true;
+			realKeyReleaseModifier = shortcutModifier;
+			jmp eventLoop;
+		}elif(keycode == shortcutCode and modifier != shortcutModifier){
+			if(!expectingSecondKeyRelease){
+				jmp eventLoop;
+			}
+			keycode = shortcutCode;
+			modifier = realKeyReleaseModifier;
+			expectingSecondKeyRelease = false;
 		}
-		if(getNextShortcut(&keycodeShortcut, (*e).detail, (*e).state, &keyReleaseNextOffset)){
+		if(getNextShortcut(&keycodeShortcut, keycode, modifier, &keyReleaseNextOffset)){
 			jmp switchCommandUp;
 		}
 		jmp eventLoop;
@@ -3333,30 +3274,16 @@ int main(int argumentAmount, const char *const *argument){
 	}
 	unmapNotifyEvent:{
 		#define e /*-*/ ((xcb_unmap_notify_event_t *)event)
-		if((*e).window == window){
-			mapped = false;
-		}
 		jmp eventLoop;
 		#undef  e
 	}
 	mapNotifyEvent:{
 		#define e /*-*/ ((xcb_map_notify_event_t *)event)
-		if((*e).window == window){
-
-
-
-			currentSelection = 0; /*! what do? */
-
-
-
-			mapped = true;
-		}
 		jmp eventLoop;
 		#undef  e
 	}
 	configureNotifyEvent:{
 		#define e /*-*/ ((xcb_configure_notify_event_t *)event)
-		/*! check validity of window properties should they change. */
 		jmp eventLoop;
 		#undef  e
 	}
@@ -3368,34 +3295,70 @@ int main(int argumentAmount, const char *const *argument){
 		if(eventWindow == (*screen).root){
 			if(property == atom._NET_CLIENT_LIST){
 				createClientList(&clientListSize, &clientListStart, &clientListToken, atom._NET_CLIENT_LIST);
+				if(clientOrder == CREATION_CLIENT_ORDER and mapped){
+					if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock globals write lock");
+					}
+					if(currentSelection > (int)*selectedClientListSize - 1){
+						currentSelection = *selectedClientListSize - 1;
+					}
+					drawWindow(NULL);
+					if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals write lock");
+					}
+				}
 				jmp eventLoop;
 			}
 			if(property == atom._NET_CLIENT_LIST_STACKING){
 				createClientList(&clientListStackingSize, &clientListStackingStart, &clientListStackingToken, atom._NET_CLIENT_LIST_STACKING);
+				if(clientOrder == STACKING_CLIENT_ORDER and mapped){
+					if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock globals write lock");
+					}
+					if(currentSelection > (int)*selectedClientListSize - 1){
+						currentSelection = *selectedClientListSize - 1;
+					}
+					drawWindow(NULL);
+					if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals write lock");
+					}
+				}
 				jmp eventLoop;
 			}
 			jmp eventLoop;
 		}
 		if(eventWindow == window){
-			/*! check validity of window properties should they change. */
 			jmp eventLoop;
 		}
 		if((client = findClientListWindow(eventWindow))){
 			free((*client).titleStart);
 			popPointer((*client).titleToken);
-			if(!getClientTitle(atom._NET_WM_NAME, atom.UTF8_STRING, client)){
-				if(!getClientTitle(atom.WM_NAME, XCB_ATOM_STRING, client)){
-					copyClientTitle(lengthof("untitled"), "untitled", XCB_NONE, client);
+			if(!getClientTitle(atom._NET_WM_VISIBLE_NAME, atom.UTF8_STRING, client)){
+				if(!getClientTitle(atom._NET_WM_NAME, atom.UTF8_STRING, client)){
+					if(!getClientTitle(atom.WM_NAME, XCB_ATOM_STRING, client)){
+						copyClientTitle(lengthof("untitled"), "untitled", XCB_NONE, client);
+					}
 				}
 			}
 		}
 		if((client = findClientListStackingWindow(eventWindow))){
 			free((*client).titleStart);
 			popPointer((*client).titleToken);
-			if(!getClientTitle(atom._NET_WM_NAME, atom.UTF8_STRING, client)){
-				if(!getClientTitle(atom.WM_NAME, XCB_ATOM_STRING, client)){
-					copyClientTitle(lengthof("untitled"), "untitled", XCB_NONE, client);
+			if(!getClientTitle(atom._NET_WM_VISIBLE_NAME, atom.UTF8_STRING, client)){
+				if(!getClientTitle(atom._NET_WM_NAME, atom.UTF8_STRING, client)){
+					if(!getClientTitle(atom.WM_NAME, XCB_ATOM_STRING, client)){
+						copyClientTitle(lengthof("untitled"), "untitled", XCB_NONE, client);
+					}
 				}
+			}
+		}
+		if(mapped){
+			if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+				printTitledError("pthread error", "could not lock globals write lock");
+			}
+			drawWindow(NULL);
+			if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+				printTitledError("pthread error", "could not unlock globals write lock");
 			}
 		}
 		jmp eventLoop;
@@ -3452,7 +3415,7 @@ int main(int argumentAmount, const char *const *argument){
 		jmp eventLoop;
 	}
 	switchCommandDown:{
-		printCommand();
+		printCommand("down");
 		switch (*eventModifierNode).command over
 			to NONE_COMMAND: /*------------*/ jmp noneCommandDown;
 			to EXECUTE_COMMAND: /*---------*/ jmp executeCommandDown;
@@ -3495,7 +3458,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectPrevious();
+		selectPreviousSelection();
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -3505,7 +3468,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectNext();
+		selectNextSelection();
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -3515,7 +3478,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectLeft();
+		selectLeftSelection();
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -3525,7 +3488,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectRight();
+		selectRightSelection();
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -3535,7 +3498,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectAbove();
+		selectAboveSelection();
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -3545,7 +3508,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectBelow();
+		selectBelowSelection();
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -3558,7 +3521,7 @@ int main(int argumentAmount, const char *const *argument){
 		jmp mainEmergencyExit;
 	}
 	switchCommandUp:{
-		printCommand();
+		printCommand("up");
 		switch (*eventModifierNode).command over
 			to NONE_COMMAND: /*------------*/ jmp noneCommandUp;
 			to EXECUTE_COMMAND: /*---------*/ jmp noneCommandUp;
@@ -4468,6 +4431,8 @@ SETCONFIGVARIABLES(){
 	titleForeground = 0x00000000;
 	titleBackground = 0x00000000;
 	titleTextCutoff = 0;
+	selectedClient = NONE_SELECTED_CLIENT;
+	selectionAction = NONE_SELECTION_ACTION;
 	ret;
 }
 READCONFIG(){
@@ -4934,9 +4899,6 @@ READCONFIG(){
 			jmp getStatementStart;
 		}
 		if(itemAmount > 1){
-			/*!
-				missing space between final argument and scope imminent
-			*/
 			printConfigError("scope argument error", "too many arguments", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, (void *)1, (void *)1, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
@@ -5438,6 +5400,8 @@ READCONFIG(){
 				to TITLE_FOREGROUND_VARIABLE: /*--------------*/ applySubinstruction(titleForeground, Set); /*-------------*/ jmp assessSubinstruction;
 				to TITLE_BACKGROUND_VARIABLE: /*--------------*/ applySubinstruction(titleBackground, Set); /*-------------*/ jmp assessSubinstruction;
 				to TITLE_TEXT_CUTOFF_VARIABLE: /*-------------*/ applySubinstruction(titleTextCutoff, Set); /*-------------*/ jmp assessSubinstruction;
+				to SELECTED_CLIENT_VARIABLE: /*---------------*/ applySubinstruction(selectedClient, Set); /*--------------*/ jmp assessSubinstruction;
+				to SELECTION_ACTION_VARIABLE: /*--------------*/ applySubinstruction(selectionAction, Set); /*-------------*/ jmp assessSubinstruction;
 				off: /*---------------------------------------*/ /*--------------------------------------------------------*/ brk;
 			end
 		}
@@ -5508,27 +5472,27 @@ READCONFIG(){
 					jmp getStatementStart;
 				}
 				to SELECT_PREVIOUS_COMMAND:{
-					selectPrevious();
+					selectPreviousSelection();
 					jmp getStatementStart;
 				}
 				to SELECT_NEXT_COMMAND:{
-					selectNext();
+					selectNextSelection();
 					jmp getStatementStart;
 				}
 				to SELECT_LEFT_COMMAND:{
-					selectLeft();
+					selectLeftSelection();
 					jmp getStatementStart;
 				}
 				to SELECT_RIGHT_COMMAND:{
-					selectRight();
+					selectRightSelection();
 					jmp getStatementStart;
 				}
 				to SELECT_ABOVE_COMMAND:{
-					selectAbove();
+					selectAboveSelection();
 					jmp getStatementStart;
 				}
 				to SELECT_BELOW_COMMAND:{
-					selectBelow();
+					selectBelowSelection();
 					jmp getStatementStart;
 				}
 				to RESTART_COMMAND:{
@@ -5764,6 +5728,14 @@ READCONFIG(){
 				}
 				to TITLE_TEXT_CUTOFF_VARIABLE:{
 					titleTextCutoff = integer0Return;
+					jmp getStatementStart;
+				}
+				to SELECTED_CLIENT_VARIABLE:{
+					selectedClient = name1Return;
+					jmp getStatementStart;
+				}
+				to SELECTION_ACTION_VARIABLE:{
+					selectionAction = name1Return;
 					jmp getStatementStart;
 				}
 				off:{
@@ -6027,25 +5999,27 @@ READCONFIG(){
 		jmp postReadConfig;
 	}
 	postReadConfig:{
+		switch clientOrder over
+			to CREATION_CLIENT_ORDER: /*-*/ selectedClientListSize = &clientListSize; /*---------*/ selectedClientListStart = &clientListStart; /*---------*/ brk;
+			to STACKING_CLIENT_ORDER: /*-*/ selectedClientListSize = &clientListStackingSize; /*-*/ selectedClientListStart = &clientListStackingStart; /*-*/ brk;
+			off: /*----------------------*/ selectedClientListSize = NULL; /*--------------------*/ selectedClientListStart = NULL; /*---------------------*/ brk;
+		end
 		if(mapped){
-			RectangleElement rectangle;
-			struct{
-				int32 /*--*/ x;
-				int32 /*--*/ y;
-				uint32 /*-*/ width;
-				uint32 /*-*/ height;
-			} valueList;
-			if(!getWindowRectangle(&rectangle)){
-				ret;
-			}
-			valueList.x = rectangle.x;
-			valueList.y = rectangle.y;
-			valueList.width = rectangle.width;
-			valueList.height = rectangle.height;
-			if(valueList.width and valueList.height){
+			ElementRectangle rectangle;
+			if(getWindowRectangle(&rectangle) and rectangle.width and rectangle.height){
+				struct{
+					int32 /*--*/ x;
+					int32 /*--*/ y;
+					uint32 /*-*/ width;
+					uint32 /*-*/ height;
+				} valueList;
+				valueList.x = rectangle.x;
+				valueList.y = rectangle.y;
+				valueList.width = rectangle.width;
+				valueList.height = rectangle.height;
 				xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, &valueList);
-				drawWindow();
 				setWindowProperties(valueList.x, valueList.y, valueList.width, valueList.height);
+				drawWindow(&rectangle);
 			}
 		}
 		xcb_flush(connection);
@@ -7116,6 +7090,49 @@ GETWINDOWMONITOR(){
 	}
 	ret NULL;
 }
+CREATECIRCLE(){
+	const uint width = radius * 2 + 1;
+	const uint height = width;
+	const int r2 = radius * radius;
+	uint32 *data = malloc(width * height * sizeof(uint32));
+	uint32 token = pushPointer(data, "createCorner() data pointer", iFree);
+	int y = -radius;
+	uint32 *currentData = data;
+	if(!data){
+		ret false;
+	}
+	jmp yLoop;
+	yLoop:{
+		if(y <= radius){
+			const int y2 = y * y;
+			int x = -radius;
+			jmp xLoop;
+			xLoop:{
+				if(x <= radius){
+					const int x2y2 = x * x + y2;
+					if(x2y2 <= r2){
+						*currentData = color;
+					}else{
+						*currentData = 0x00000000;
+					}
+					inc currentData;
+					inc x;
+					jmp xLoop;
+				}
+				inc y;
+				jmp yLoop;
+			}
+		}
+		(*image).data = data;
+		(*image).dataToken = token;
+		(*image).size = width * height * sizeof(uint32);
+		(*image).x = 0;
+		(*image).y = 0;
+		(*image).width = width;
+		(*image).height = height;
+		ret true;
+	}
+}
 COMPOSITEIMAGES(){
 	int intersectionWidth;
 	int intersectionHeight;
@@ -7575,6 +7592,16 @@ ROTATEIMAGE(){
 		ret true;
 	}
 }
+FILLDRAWABLE(){
+	xcb_rectangle_t rectangle;
+	rectangle.x = x;
+	rectangle.y = y;
+	rectangle.width = width;
+	rectangle.height = height;
+	xcb_change_gc(connection, gc, XCB_GC_FOREGROUND, &color);
+	xcb_poly_fill_rectangle(connection, drawable, gc, 1, &rectangle);
+	ret;
+}
 RESTARTCOMMAND(){
 	shmDisconnect();
 	freeConfigVariables();
@@ -7600,6 +7627,7 @@ EXITCOMMAND(){
 
 
 
+	deleteStringRoot(&selectedClientRoot);
 	deleteStringRoot(&selectionActionRoot);
 	deleteStringRoot(&verticalAlignmentRoot);
 	deleteStringRoot(&horizontalAlignmentRoot);
@@ -7702,28 +7730,15 @@ PRINTTITLEDNAMEDERROR(){
 	ret;
 }
 PRINTXERROR(){
-
-
-def struct{
-	uint8_t response_type;
-	uint8_t error_code;
-	uint32_t resource_id;
-	uint16_t minor_code;
-	uint8_t major_code;
-} xcb_generic_error_t;
-
-
 	#define useErrorName(n0, n1) /*--------------*/ n0 == n1? *(n1 + ((*error).error_code >= countof(n1)? countof(n1) - 1 : (*error).error_code))
 	#define useErrorOperationName(n0, n1, n2) /*-*/ n0 == n1? *(n2 + ((*error).major_code >= countof(n2)? countof(n2) - 1 : (*error).major_code))
 	const xcb_generic_error_t *const error = (void *)event;
 	printError("%s%s: %sX error event:%s %s error in %s operation using the 0x%x resource\n", colorStart, programName, colorError, colorEnd
 		, useErrorName(name, errorName)
 		: useErrorName(name, randrErrorName)
-		: useErrorName(name, xfixesErrorName)
 		: "unrecognized"
 		, useErrorOperationName(name, errorName, operationName)
 		: useErrorOperationName(name, randrErrorName, randrOperationName)
-		: useErrorOperationName(name, xfixesErrorName, xfixesOperationName)
 		: "unrecognized"
 	, (*error).resource_id);
 	ret;
