@@ -1170,7 +1170,7 @@ SOFTWARE. */
 	local int /*--------------------------*/ selectionColumnSize;    /*!*/
 	local int /*--------------------------*/ maxSelectionColumnSize; /*!*/
 
-	local xcb_pixmap_t /*-----------------*/ circlePixmap; /*!*/
+	local xcb_pixmap_t /*-----------------*/ circlePixmap;           /*!*/
 
 
 
@@ -1227,7 +1227,7 @@ SOFTWARE. */
 	local uint32 /*-----------------------*/ titleBackground;
 
 	local uint /*-------------------------*/ titleTextCutoff;
-	local uint8 /*------------------------*/ selectedClient;
+	local uint8 /*------------------------*/ selectedClient = FIRST_SELECTED_CLIENT;
 	local uint8 /*------------------------*/ selectionAction;
 
 	local uint /*-------------------------*/ circleRadius; /*!*/
@@ -1250,6 +1250,50 @@ SOFTWARE. */
 
 	local uint8 /*------------------------*/ selectionFit;                 /*! how many selections fit in a row/column? N/A yet */
 	local uint /*-------------------------*/ selectionFitAmount = 4;
+
+
+
+
+
+
+
+
+
+#define GETFOCUSEDWINDOW() /*-*/ local xcb_window_t getFocusedWindow(void)
+
+GETFOCUSEDWINDOW();
+
+GETFOCUSEDWINDOW(){
+	xcb_window_t window = XCB_NONE;
+	jmp getActiveWindow;
+	getActiveWindow:{
+		xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*screen).root, atom._NET_ACTIVE_WINDOW, XCB_ATOM_WINDOW, 0, 1), NULL);
+		uint32 token = pushPointer(reply, "getFocusedWindow() get property reply", iFree);
+		bool found = false;
+		if(reply){
+			if(xcb_get_property_value_length(reply)){
+				window = *(xcb_window_t *)xcb_get_property_value(reply);
+				found = true;
+			}
+			free(reply);
+			popPointer(token);
+			if(flag){
+				ret window;
+			}
+		}
+		jmp getFocusedWindow;
+	}
+	getFocusedWindow:{
+		xcb_get_input_focus_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_input_focus_unchecked(connection), NULL);
+		uint32 token = pushPointer(reply, "getFocusedWindow() get input focus reply", iFree);
+		if(reply){
+			window = (*reply).focus;
+			free(reply);
+			popPointer(token);
+		}
+		ret window;
+	}
+}
 
 
 
@@ -1392,19 +1436,32 @@ COPYCLIENTTITLE(){
 
 
 
+
+
+
+
+
+
 			/*!
-				this may break a utf8 char and make us print a fake one. even checking the length and equating it to 3 is wrong.
+				this may break a utf8 char and make us print a fake one. even checking the length is wrong. even the sizeof() in the malloc is a problem.
 
 				we need to make a function to recognize utf8 chars and remove them.
 			*/
-
-
 
 			if(lengthCopy > length){
 				*(titleStart + length - 3) = '.';
 				*(titleStart + length - 2) = '.';
 				*(titleStart + length - 1) = '.';
 			}
+
+
+
+
+
+
+
+
+
 		}else{
 			if(lengthCopy > length){
 				*(titleStart + length - 3) = '.';
@@ -1469,34 +1526,53 @@ SHOWWINDOW(){
 		valueList.height = rectangle.height;
 		valueList.stackMode = XCB_STACK_MODE_ABOVE;
 		if(clientOrder){
+
+
+
+
+
+
+
+
+
 			switch selectedClient over
-				to FIRST_SELECTED_CLIENT: /*---*/ currentSelection = 0; /*---------------------------*/ brk;
-				to LAST_SELECTED_CLIENT: /*----*/ currentSelection = *selectedClientListSize - 1; /*-*/ brk;
-
-
-
-
-
-
-
-
-
-				/*!*/
-
-				to FOCUSED_SELECTED_CLIENT: /*-*/ currentSelection = 0; /*---------------------------*/ brk; /*! the focused (of the chosen client list?) */
-
-				/*!*/
-
-
-
-
-
-
-
-
-
-				off: /*------------------------*/ currentSelection = -1; /*--------------------------*/ brk;
+				to FIRST_SELECTED_CLIENT:{
+					currentSelection = 0;
+					brk;
+				}
+				to LAST_SELECTED_CLIENT:{
+					currentSelection = *selectedClientListSize - 1;
+					brk;
+				}
+				to FOCUSED_SELECTED_CLIENT:{
+					const xcb_window_t window = getFocusedWindow();
+					Client *client;
+					currentSelection = -1;
+					if(clientOrder == CREATION_CLIENT_ORDER){
+						if((client = findClientListWindow(window))){
+							currentSelection = client - *selectedClientListStart;
+						}
+						brk;
+					}
+					if((client = findClientListStackingWindow(window))){
+						currentSelection = client - *selectedClientListStart;
+					}
+					brk;
+				}
+				off:{
+					currentSelection = -1;
+					brk;
+				}
 			end
+
+
+
+
+
+
+
+
+
 		}
 		xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &userTime);
 		xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_STACK_MODE, &valueList);
@@ -1691,8 +1767,8 @@ DRAWWINDOW(){
 		jmp clearArea;
 	}
 	drawSelections:{
-		Client *current = clientListStart;
-		Client *const wall = current + clientListSize;
+		Client *current = *selectedClientListStart;
+		Client *const wall = current + *selectedClientListSize;
 
 
 
@@ -1720,7 +1796,7 @@ DRAWWINDOW(){
 		drawSelectionLoop:{
 			if(current < wall){
 				uint32 localSelectionBackground = selectionBackground;
-				if(current - clientListStart == currentSelection){
+				if(current - *selectedClientListStart == currentSelection){
 					localSelectionBackground = selectedSelectionBackground;
 				}
 				fillDrawable(pixmap, gc, localSelectionX, localSelectionY, localSelectionWidth, localSelectionHeight, localSelectionBackground);
@@ -1859,30 +1935,18 @@ GETWINDOWRECTANGLE(){
 			brk;
 		}
 		to FOCUSED_WINDOW_WHICH_MONITOR:{
-			xcb_get_input_focus_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_input_focus_unchecked(connection), NULL);
-			uint32 token = pushPointer(reply, "getWindowRectangle() get input focus reply", iFree);
-			if(reply){
-				const xcb_window_t window = (*reply).focus;
-				free(reply);
-				popPointer(token);
-				if(!window or window == (*screen).root){
-					monitor = getPointerMonitor();
-					brk;
-				}
-				monitor = getWindowMonitor(window);
+			const xcb_window_t window = getFocusedWindow();
+			if(!window or window == (*screen).root){
+				monitor = getPointerMonitor();
 				brk;
 			}
-			monitor = NULL;
+			monitor = getWindowMonitor(window);
 			brk;
 		}
 		off:{
-			monitor = NULL;
-			brk;
+			ret false;
 		}
 	end
-	if(!monitor){
-		ret false;
-	}
 	switch windowWidthType over
 		to INTEGER_NUMBER_TYPE: /*----*/ width = windowWidth; /*---------------------------------------------*/ brk;
 		to PERCENTAGE_NUMBER_TYPE: /*-*/ width = (*monitor).w * windowWidth / 100; /*------------------------*/ brk;
@@ -1955,9 +2019,12 @@ HIDEWINDOW(){
 	if(!mapped){
 		ret;
 	}
-	selectedWindow = (*(clientListStart + currentSelection)).window;
 	xcb_unmap_window(connection, window);
 	mapped = false;
+	if(!clientOrder){
+		ret;
+	}
+	selectedWindow = (*(*selectedClientListStart + currentSelection)).window;
 	switch selectionAction over
 		to FOCUS_WINDOW_SELECTION_ACTION:{
 			xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, selectedWindow, atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, 0, 1), NULL);
@@ -2048,8 +2115,8 @@ SELECTLEFTSELECTION(){
 			if(!(currentSelection % selectionRowSize)){
 				if(allowCircularNavigation){
 					currentSelection += selectionRowSize - 1;
-					if(currentSelection > clientListSize - 1){
-						currentSelection = clientListSize - 1;
+					if(currentSelection > *selectedClientListSize - 1){
+						currentSelection = *selectedClientListSize - 1;
 					}
 				}
 				ret;
@@ -2077,7 +2144,7 @@ SELECTRIGHTSELECTION(){
 #ifdef a
 	switch horizontalSelectionOrder over
 		to LEFT_TO_RIGHT_HORIZONTAL_SELECTION_ORDER:{
-			if(currentSelection == clientListSize - 1 or !((currentSelection + 1) % selectionRowSize)){
+			if(currentSelection == *selectedClientListSize - 1 or !((currentSelection + 1) % selectionRowSize)){
 				if(allowCircularNavigation){
 					currentSelection -= currentSelection % selectionRowSize;
 				}
@@ -2109,7 +2176,7 @@ SELECTABOVESELECTION(){
 			if(currentSelection - selectionRowSize < 0){
 				if(allowCircularNavigation){
 					currentSelection += (selectionColumnSize - 1) * selectionRowSize;
-					if(currentSelection > clientListSize - 1){
+					if(currentSelection > *selectedClientListSize - 1){
 						currentSelection -= selectionRowSize;
 					}
 				}
@@ -2138,7 +2205,7 @@ SELECTBELOWSELECTION(){
 #ifdef a
 	switch verticalSelectionOrder over
 		to UP_TO_DOWN_VERTICAL_SELECTION_ORDER:{
-			if(currentSelection + selectionRowSize > clientListSize - 1){
+			if(currentSelection + selectionRowSize > *selectedClientListSize - 1){
 				if(allowCircularNavigation){
 
 
