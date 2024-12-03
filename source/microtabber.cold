@@ -1375,6 +1375,7 @@ GETCLIENTTITLE(){
 	ret false;
 }
 COPYCLIENTTITLE(){
+	const uint lengthCopy = length;
 	uint8 *titleStart;
 	uint32 titleToken;
 	if(!length){
@@ -1387,34 +1388,28 @@ COPYCLIENTTITLE(){
 	titleToken = pushPointer(titleStart, "window title pointer", iFree);
 	if(titleStart){
 		copyMemory(valueStart, titleStart, length);
-		if(titleTextCutoff){
-			fprintf(stdout, "if this is greater than 0 there is a bug: %u\n", titleTextCutoff);
-			if(property == atom._NET_WM_NAME or property == atom._NET_WM_VISIBLE_NAME){
+		if(property == atom._NET_WM_NAME or property == atom._NET_WM_VISIBLE_NAME){
 
 
 
-				/*!
-					this may break a utf8 char and make us print a fake one. even checking the length and equating it to 3 is wrong.
+			/*!
+				this may break a utf8 char and make us print a fake one. even checking the length and equating it to 3 is wrong.
 
-					we need to make a function to recognize utf8 chars and remove them.
-				*/
-
-
-
-				if(length - 3 > titleTextCutoff){
-					*(titleStart + length - 3) = '.';
-					*(titleStart + length - 2) = '.';
-					*(titleStart + length - 1) = '.';
-				}
+				we need to make a function to recognize utf8 chars and remove them.
+			*/
 
 
 
-			}else{
-				if(length - 3 > titleTextCutoff){
-					*(titleStart + length - 3) = '.';
-					*(titleStart + length - 2) = '.';
-					*(titleStart + length - 1) = '.';
-				}
+			if(lengthCopy > length){
+				*(titleStart + length - 3) = '.';
+				*(titleStart + length - 2) = '.';
+				*(titleStart + length - 1) = '.';
+			}
+		}else{
+			if(lengthCopy > length){
+				*(titleStart + length - 3) = '.';
+				*(titleStart + length - 2) = '.';
+				*(titleStart + length - 1) = '.';
 			}
 		}
 		*(titleStart + length) = '\0';
