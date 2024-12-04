@@ -42,6 +42,9 @@
 		optimize properties further. for example, we shouldn't be keeping both _NET_CLIENT_LIST and _NET_CLIENT_LIST_STACKING updated since the user is using either or neither.
 		use scopes for each element in config.
 		be smarter about round corners, since the user can always be a dick.
+		implement a shown clients setting with possible settings none, monitor, workspace, all.
+		optimize query text extent calls when drawing the window.
+		copyClientTitle() is a bit wasteful and should be implemented better.
 */
 
 
@@ -114,267 +117,273 @@ SOFTWARE. */
 /*!}*/
 
 /*!defines:{*/
-	#define DEBUG /*----------------------------------*/ (true)
+	#define DEBUG /*------------------------------------*/ (true)
 
-	#define PROGRAM_NAME /*---------------------------*/ "microtabber"
+	#define PROGRAM_NAME /*-----------------------------*/ "microtabber"
 
-	#define PTHREAD_CREATE_SUCCESS /*-----------------*/ (0)
-	#define PTHREAD_SETCANCELSTATE_SUCCESS /*---------*/ (0)
-	#define PTHREAD_SETCANCELTYPE_SUCCESS /*----------*/ (0)
-	#define PTHREAD_MUTEXATTR_INIT_SUCCESS /*---------*/ (0)
-	#define PTHREAD_MUTEXATTR_SETPSHARED_SUCCESS /*---*/ (0)
-	#define PTHREAD_MUTEXATTR_DESTROY_SUCCESS /*------*/ (0)
-	#define PTHREAD_MUTEX_INIT_SUCCESS /*-------------*/ (0)
-	#define PTHREAD_MUTEX_LOCK_SUCCESS /*-------------*/ (0)
-	#define PTHREAD_MUTEX_TRYLOCK_SUCCESS /*----------*/ (0)
-	#define PTHREAD_MUTEX_UNLOCK_SUCCESS /*-----------*/ (0)
-	#define PTHREAD_MUTEX_DESTROY_SUCCESS /*----------*/ (0)
-	#define PTHREAD_CONDATTR_INIT_SUCCESS /*----------*/ (0)
-	#define PTHREAD_CONDATTR_SETPSHARED_SUCCESS /*----*/ (0)
-	#define PTHREAD_CONDATTR_DESTROY_SUCCESS /*-------*/ (0)
-	#define PTHREAD_COND_INIT_SUCCESS /*--------------*/ (0)
-	#define PTHREAD_COND_WAIT_SUCCESS /*--------------*/ (0)
-	#define PTHREAD_COND_TIMEDWAIT_SUCCESS /*---------*/ (0)
-	#define PTHREAD_COND_SIGNAL_SUCCESS /*------------*/ (0)
-	#define PTHREAD_COND_BROADCAST_SUCCESS /*---------*/ (0)
-	#define PTHREAD_COND_DESTROY_SUCCESS /*-----------*/ (0)
-	#define PTHREAD_RWLOCKATTR_INIT_SUCCESS /*--------*/ (0)
-	#define PTHREAD_RWLOCKATTR_SETKIND_NP_SUCCESS /*--*/ (0)
-	#define PTHREAD_RWLOCKATTR_DESTROY_SUCCESS /*-----*/ (0)
-	#define PTHREAD_RWLOCK_INIT_SUCCESS /*------------*/ (0)
-	#define PTHREAD_RWLOCK_WRLOCK_SUCCESS /*----------*/ (0)
-	#define PTHREAD_RWLOCK_RDLOCK_SUCCESS /*----------*/ (0)
-	#define PTHREAD_RWLOCK_UNLOCK_SUCCESS /*----------*/ (0)
-	#define PTHREAD_RWLOCK_DESTROY_SUCCESS /*---------*/ (0)
-	#define PTHREAD_JOIN_SUCCESS /*-------------------*/ (0)
+	#define PTHREAD_CREATE_SUCCESS /*-------------------*/ (0)
+	#define PTHREAD_SETCANCELSTATE_SUCCESS /*-----------*/ (0)
+	#define PTHREAD_SETCANCELTYPE_SUCCESS /*------------*/ (0)
+	#define PTHREAD_MUTEXATTR_INIT_SUCCESS /*-----------*/ (0)
+	#define PTHREAD_MUTEXATTR_SETPSHARED_SUCCESS /*-----*/ (0)
+	#define PTHREAD_MUTEXATTR_DESTROY_SUCCESS /*--------*/ (0)
+	#define PTHREAD_MUTEX_INIT_SUCCESS /*---------------*/ (0)
+	#define PTHREAD_MUTEX_LOCK_SUCCESS /*---------------*/ (0)
+	#define PTHREAD_MUTEX_TRYLOCK_SUCCESS /*------------*/ (0)
+	#define PTHREAD_MUTEX_UNLOCK_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_MUTEX_DESTROY_SUCCESS /*------------*/ (0)
+	#define PTHREAD_CONDATTR_INIT_SUCCESS /*------------*/ (0)
+	#define PTHREAD_CONDATTR_SETPSHARED_SUCCESS /*------*/ (0)
+	#define PTHREAD_CONDATTR_DESTROY_SUCCESS /*---------*/ (0)
+	#define PTHREAD_COND_INIT_SUCCESS /*----------------*/ (0)
+	#define PTHREAD_COND_WAIT_SUCCESS /*----------------*/ (0)
+	#define PTHREAD_COND_TIMEDWAIT_SUCCESS /*-----------*/ (0)
+	#define PTHREAD_COND_SIGNAL_SUCCESS /*--------------*/ (0)
+	#define PTHREAD_COND_BROADCAST_SUCCESS /*-----------*/ (0)
+	#define PTHREAD_COND_DESTROY_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_RWLOCKATTR_INIT_SUCCESS /*----------*/ (0)
+	#define PTHREAD_RWLOCKATTR_SETKIND_NP_SUCCESS /*----*/ (0)
+	#define PTHREAD_RWLOCKATTR_DESTROY_SUCCESS /*-------*/ (0)
+	#define PTHREAD_RWLOCK_INIT_SUCCESS /*--------------*/ (0)
+	#define PTHREAD_RWLOCK_WRLOCK_SUCCESS /*------------*/ (0)
+	#define PTHREAD_RWLOCK_RDLOCK_SUCCESS /*------------*/ (0)
+	#define PTHREAD_RWLOCK_UNLOCK_SUCCESS /*------------*/ (0)
+	#define PTHREAD_RWLOCK_DESTROY_SUCCESS /*-----------*/ (0)
+	#define PTHREAD_JOIN_SUCCESS /*---------------------*/ (0)
 
-	#define GETHOSTNAME_SUCCESS /*--------------------*/ (0)
+	#define GETHOSTNAME_SUCCESS /*----------------------*/ (0)
 
-	#define _STRING_NODE_CHILDREN_AMOUNT /*-----------*/ (14)
-	#define STRING_NODE_CHILDREN_AMOUNT /*------------*/ (_STRING_NODE_CHILDREN_AMOUNT > 28? 28 : _STRING_NODE_CHILDREN_AMOUNT)
-	#define SHORTCUT_CODE_AMOUNT /*-------------------*/ (256)
+	#define _STRING_NODE_CHILDREN_AMOUNT /*-------------*/ (14)
+	#define STRING_NODE_CHILDREN_AMOUNT /*--------------*/ (_STRING_NODE_CHILDREN_AMOUNT > 28? 28 : _STRING_NODE_CHILDREN_AMOUNT)
+	#define SHORTCUT_CODE_AMOUNT /*---------------------*/ (256)
 
-	#define DEFAULT_OUTPUT_STREAM /*------------------*/ (stdout)
-	#define DEFAULT_ERROR_STREAM /*-------------------*/ (stderr)
+	#define DEFAULT_OUTPUT_STREAM /*--------------------*/ (stdout)
+	#define DEFAULT_ERROR_STREAM /*---------------------*/ (stderr)
 
-	#define MESSAGE_START /*--------------------------*/ ("\x1b[1m")
-	#define MESSAGE_FATAL /*--------------------------*/ ("\x1b[91m")
-	#define MESSAGE_ERROR /*--------------------------*/ ("\x1b[33m")
-	#define MESSAGE_EVENT /*--------------------------*/ ("\x1b[32m")
-	#define MESSAGE_END /*----------------------------*/ ("\x1b[m")
+	#define MESSAGE_START /*----------------------------*/ ("\x1b[1m")
+	#define MESSAGE_FATAL /*----------------------------*/ ("\x1b[91m")
+	#define MESSAGE_ERROR /*----------------------------*/ ("\x1b[33m")
+	#define MESSAGE_EVENT /*----------------------------*/ ("\x1b[32m")
+	#define MESSAGE_END /*------------------------------*/ ("\x1b[m")
 
-	#define NONE_ARGUMENT /*--------------------------*/ (0)
-	#define UNRECOGNIZED_ARGUMENT /*------------------*/ (1)
-	#define HELP_ARGUMENT /*--------------------------*/ (2)
-	#define STDOUT_ARGUMENT /*------------------------*/ (3)
-	#define STDERR_ARGUMENT /*------------------------*/ (4)
-	#define CONFIG_ARGUMENT /*------------------------*/ (5)
-	#define ERROR_ARGUMENT /*-------------------------*/ (6)
-	#define SERVER_ARGUMENT /*------------------------*/ (7)
+	#define NONE_ARGUMENT /*----------------------------*/ (0)
+	#define UNRECOGNIZED_ARGUMENT /*--------------------*/ (1)
+	#define HELP_ARGUMENT /*----------------------------*/ (2)
+	#define STDOUT_ARGUMENT /*--------------------------*/ (3)
+	#define STDERR_ARGUMENT /*--------------------------*/ (4)
+	#define CONFIG_ARGUMENT /*--------------------------*/ (5)
+	#define ERROR_ARGUMENT /*---------------------------*/ (6)
+	#define SERVER_ARGUMENT /*--------------------------*/ (7)
 
-	#define NONE_INSTRUCTION_TYPE /*------------------*/ (b(0000000))
-	#define NAME_INSTRUCTION_TYPE /*------------------*/ (b(0000001))
-	#define NAME_LIST_INSTRUCTION_TYPE /*-------------*/ (b(0000010))
-	#define NUMBER_INSTRUCTION_TYPE /*----------------*/ (b(0000100))
-	#define STRING_INSTRUCTION_TYPE /*----------------*/ (b(0001000))
-	#define EXECUTE_INSTRUCTION_TYPE /*---------------*/ (b(0010000))
-	#define IMAGE_INSTRUCTION_TYPE /*-----------------*/ (b(0100000))
-	#define END_INSTRUCTION_TYPE /*-------------------*/ (b(1000000))
+	#define NONE_INSTRUCTION_TYPE /*--------------------*/ (b(0000000))
+	#define NAME_INSTRUCTION_TYPE /*--------------------*/ (b(0000001))
+	#define NAME_LIST_INSTRUCTION_TYPE /*---------------*/ (b(0000010))
+	#define NUMBER_INSTRUCTION_TYPE /*------------------*/ (b(0000100))
+	#define STRING_INSTRUCTION_TYPE /*------------------*/ (b(0001000))
+	#define EXECUTE_INSTRUCTION_TYPE /*-----------------*/ (b(0010000))
+	#define IMAGE_INSTRUCTION_TYPE /*-------------------*/ (b(0100000))
+	#define END_INSTRUCTION_TYPE /*---------------------*/ (b(1000000))
 
-	#define NONE_NAME_LIST /*-------------------------*/ (0)
-	#define SUCCESS_NAME_LIST /*----------------------*/ (1)
-	#define INVALID_NAME_NAME_LIST /*-----------------*/ (2)
-	#define PREMATURE_END_NAME_LIST /*----------------*/ (3)
+	#define NONE_NAME_LIST /*---------------------------*/ (0)
+	#define SUCCESS_NAME_LIST /*------------------------*/ (1)
+	#define INVALID_NAME_NAME_LIST /*-------------------*/ (2)
+	#define PREMATURE_END_NAME_LIST /*------------------*/ (3)
 
-	#define NONE_NUMBER /*----------------------------*/ (0)
-	#define VALID_NUMBER_NUMBER /*--------------------*/ (1)
-	#define NON_NUMBER_NUMBER /*----------------------*/ (2)
-	#define OVERFLOWN_NUMBER_NUMBER /*----------------*/ (3)
-	#define DIVIDED_BY_ZERO_NUMBER /*-----------------*/ (4)
+	#define NONE_NUMBER /*------------------------------*/ (0)
+	#define VALID_NUMBER_NUMBER /*----------------------*/ (1)
+	#define NON_NUMBER_NUMBER /*------------------------*/ (2)
+	#define OVERFLOWN_NUMBER_NUMBER /*------------------*/ (3)
+	#define DIVIDED_BY_ZERO_NUMBER /*-------------------*/ (4)
 
-	#define NONE_READ_CONFIG /*-----------------------*/ (0)
-	#define CANNOT_OPEN_READ_CONFIG /*----------------*/ (1)
-	#define CANNOT_READ_READ_CONFIG /*----------------*/ (2)
-	#define UNSUPPORTED_FORMAT_READ_CONFIG /*---------*/ (3)
-	#define BAD_HEADER_READ_CONFIG /*-----------------*/ (4)
-	#define BAD_DEPTH_READ_CONFIG /*------------------*/ (5)
-	#define BAD_COMPRESSION_READ_CONFIG /*------------*/ (6)
-	#define UNSUPPORTED_HEIGHT_READ_CONFIG /*---------*/ (7)
-	#define BAD_SIZE_READ_CONFIG /*-------------------*/ (8)
-	#define FAILED_READ_CONFIG /*---------------------*/ (9)
-	#define BAD_PIXELS_READ_CONFIG /*-----------------*/ (10)
-	#define BAD_IMAGE_READ_CONFIG /*------------------*/ (11)
-	#define SUCCESS_READ_CONFIG /*--------------------*/ (12)
+	#define NONE_READ_CONFIG /*-------------------------*/ (0)
+	#define CANNOT_OPEN_READ_CONFIG /*------------------*/ (1)
+	#define CANNOT_READ_READ_CONFIG /*------------------*/ (2)
+	#define UNSUPPORTED_FORMAT_READ_CONFIG /*-----------*/ (3)
+	#define BAD_HEADER_READ_CONFIG /*-------------------*/ (4)
+	#define BAD_DEPTH_READ_CONFIG /*--------------------*/ (5)
+	#define BAD_COMPRESSION_READ_CONFIG /*--------------*/ (6)
+	#define UNSUPPORTED_HEIGHT_READ_CONFIG /*-----------*/ (7)
+	#define BAD_SIZE_READ_CONFIG /*---------------------*/ (8)
+	#define FAILED_READ_CONFIG /*-----------------------*/ (9)
+	#define BAD_PIXELS_READ_CONFIG /*-------------------*/ (10)
+	#define BAD_IMAGE_READ_CONFIG /*--------------------*/ (11)
+	#define SUCCESS_READ_CONFIG /*----------------------*/ (12)
 
-	#define NONE_BOOLEAN /*---------------------------*/ (0)
-	#define TRUE_BOOLEAN /*---------------------------*/ (1)
-	#define FALSE_BOOLEAN /*--------------------------*/ (2)
+	#define NONE_BOOLEAN /*-----------------------------*/ (0)
+	#define TRUE_BOOLEAN /*-----------------------------*/ (1)
+	#define FALSE_BOOLEAN /*----------------------------*/ (2)
 
-	#define NONE_COMMAND /*---------------------------*/ (0)
-	#define EXECUTE_COMMAND /*------------------------*/ (1)
-	#define SHOW_COMMAND /*---------------------------*/ (2)
-	#define SELECT_PREVIOUS_COMMAND /*----------------*/ (3)
-	#define SELECT_NEXT_COMMAND /*--------------------*/ (4)
-	#define SELECT_LEFT_COMMAND /*--------------------*/ (5)
-	#define SELECT_RIGHT_COMMAND /*-------------------*/ (6)
-	#define SELECT_ABOVE_COMMAND /*-------------------*/ (7)
-	#define SELECT_BELOW_COMMAND /*-------------------*/ (8)
-	#define RESTART_COMMAND /*------------------------*/ (9)
-	#define EXIT_COMMAND /*---------------------------*/ (10)
+	#define NONE_COMMAND /*-----------------------------*/ (0)
+	#define EXECUTE_COMMAND /*--------------------------*/ (1)
+	#define SHOW_COMMAND /*-----------------------------*/ (2)
+	#define SELECT_PREVIOUS_COMMAND /*------------------*/ (3)
+	#define SELECT_NEXT_COMMAND /*----------------------*/ (4)
+	#define SELECT_LEFT_COMMAND /*----------------------*/ (5)
+	#define SELECT_RIGHT_COMMAND /*---------------------*/ (6)
+	#define SELECT_ABOVE_COMMAND /*---------------------*/ (7)
+	#define SELECT_BELOW_COMMAND /*---------------------*/ (8)
+	#define RESTART_COMMAND /*--------------------------*/ (9)
+	#define EXIT_COMMAND /*-----------------------------*/ (10)
 
-	#define NONE_VARIABLE /*--------------------------*/ (0)
-	#define WINDOW_X_VARIABLE /*----------------------*/ (1)
-	#define WINDOW_Y_VARIABLE /*----------------------*/ (2)
-	#define WINDOW_X_OFFSET_VARIABLE /*---------------*/ (3)
-	#define WINDOW_Y_OFFSET_VARIABLE /*---------------*/ (4)
-	#define WINDOW_HORIZONTAL_ALIGNMENT_VARIABLE /*---*/ (5)
-	#define WINDOW_VERTICAL_ALIGNMENT_VARIABLE /*-----*/ (6)
-	#define WINDOW_WIDTH_VARIABLE /*------------------*/ (7)
-	#define WINDOW_HEIGHT_VARIABLE /*-----------------*/ (8)
-	#define SELECTION_MARGIN_VARIABLE /*--------------*/ (9)
-	#define SELECTION_PADDING_VARIABLE /*-------------*/ (10)
-	#define SELECTION_GAP_VARIABLE /*-----------------*/ (11)
-	#define CLIENT_X_VARIABLE /*----------------------*/ (12)
-	#define CLIENT_Y_VARIABLE /*----------------------*/ (13)
-	#define CLIENT_X_OFFSET_VARIABLE /*---------------*/ (14)
-	#define CLIENT_Y_OFFSET_VARIABLE /*---------------*/ (15)
-	#define CLIENT_HORIZONTAL_ALIGNMENT_VARIABLE /*---*/ (16)
-	#define CLIENT_VERTICAL_ALIGNMENT_VARIABLE /*-----*/ (17)
-	#define CLIENT_WIDTH_VARIABLE /*------------------*/ (18)
-	#define CLIENT_HEIGHT_VARIABLE /*-----------------*/ (19)
-	#define TITLE_X_VARIABLE /*-----------------------*/ (20)
-	#define TITLE_Y_VARIABLE /*-----------------------*/ (21)
-	#define TITLE_X_OFFSET_VARIABLE /*----------------*/ (22)
-	#define TITLE_Y_OFFSET_VARIABLE /*----------------*/ (23)
-	#define TITLE_HORIZONTAL_ALIGNMENT_VARIABLE /*----*/ (24)
-	#define TITLE_VERTICAL_ALIGNMENT_VARIABLE /*------*/ (25)
-	#define TITLE_WIDTH_VARIABLE /*-------------------*/ (26)
-	#define TITLE_HEIGHT_VARIABLE /*------------------*/ (27)
-	#define WHICH_MONITOR_VARIABLE /*-----------------*/ (28)
-	#define CLIENT_ORDER_VARIABLE /*------------------*/ (29)
-	#define ALLOW_CIRCULAR_NAVIGATION_VARIABLE /*-----*/ (30)
-	#define FONT_VARIABLE /*--------------------------*/ (31)
-	#define WINDOW_BACKGROUND_VARIABLE /*-------------*/ (32)
-	#define SELECTION_BACKGROUND_VARIABLE /*----------*/ (33)
-	#define SELECTED_SELECTION_BACKGROUND_VARIABLE /*-*/ (34)
-	#define CLIENT_BACKGROUND_VARIABLE /*-------------*/ (35)
-	#define TITLE_FOREGROUND_VARIABLE /*--------------*/ (36)
-	#define TITLE_BACKGROUND_VARIABLE /*--------------*/ (37)
-	#define TITLE_TEXT_CUTOFF_VARIABLE /*-------------*/ (38)
-	#define SELECTED_CLIENT_VARIABLE /*---------------*/ (39)
-	#define SELECTION_ACTION_VARIABLE /*--------------*/ (40)
+	#define NONE_VARIABLE /*----------------------------*/ (0)
+	#define WINDOW_X_VARIABLE /*------------------------*/ (1)
+	#define WINDOW_Y_VARIABLE /*------------------------*/ (2)
+	#define WINDOW_X_OFFSET_VARIABLE /*-----------------*/ (3)
+	#define WINDOW_Y_OFFSET_VARIABLE /*-----------------*/ (4)
+	#define WINDOW_HORIZONTAL_ALIGNMENT_VARIABLE /*-----*/ (5)
+	#define WINDOW_VERTICAL_ALIGNMENT_VARIABLE /*-------*/ (6)
+	#define WINDOW_WIDTH_VARIABLE /*--------------------*/ (7)
+	#define WINDOW_HEIGHT_VARIABLE /*-------------------*/ (8)
+	#define SELECTION_MARGIN_VARIABLE /*----------------*/ (9)
+	#define SELECTION_PADDING_VARIABLE /*---------------*/ (10)
+	#define SELECTION_GAP_VARIABLE /*-------------------*/ (11)
+	#define CLIENT_X_VARIABLE /*------------------------*/ (12)
+	#define CLIENT_Y_VARIABLE /*------------------------*/ (13)
+	#define CLIENT_X_OFFSET_VARIABLE /*-----------------*/ (14)
+	#define CLIENT_Y_OFFSET_VARIABLE /*-----------------*/ (15)
+	#define CLIENT_HORIZONTAL_ALIGNMENT_VARIABLE /*-----*/ (16)
+	#define CLIENT_VERTICAL_ALIGNMENT_VARIABLE /*-------*/ (17)
+	#define CLIENT_WIDTH_VARIABLE /*--------------------*/ (18)
+	#define CLIENT_HEIGHT_VARIABLE /*-------------------*/ (19)
+	#define TITLE_X_VARIABLE /*-------------------------*/ (20)
+	#define TITLE_Y_VARIABLE /*-------------------------*/ (21)
+	#define TITLE_X_OFFSET_VARIABLE /*------------------*/ (22)
+	#define TITLE_Y_OFFSET_VARIABLE /*------------------*/ (23)
+	#define TITLE_HORIZONTAL_ALIGNMENT_VARIABLE /*------*/ (24)
+	#define TITLE_VERTICAL_ALIGNMENT_VARIABLE /*--------*/ (25)
+	#define TITLE_WIDTH_VARIABLE /*---------------------*/ (26)
+	#define TITLE_HEIGHT_VARIABLE /*--------------------*/ (27)
+	#define WHICH_MONITOR_VARIABLE /*-------------------*/ (28)
+	#define CLIENT_ORDER_VARIABLE /*--------------------*/ (29)
+	#define ALLOW_CIRCULAR_NAVIGATION_VARIABLE /*-------*/ (30)
+	#define FONT_VARIABLE /*----------------------------*/ (31)
+	#define WINDOW_BACKGROUND_VARIABLE /*---------------*/ (32)
+	#define SELECTION_BACKGROUND_VARIABLE /*------------*/ (33)
+	#define CLIENT_BACKGROUND_VARIABLE /*---------------*/ (34)
+	#define TITLE_FOREGROUND_VARIABLE /*----------------*/ (35)
+	#define TITLE_BACKGROUND_VARIABLE /*----------------*/ (36)
+	#define SELECTED_SELECTION_BACKGROUND_VARIABLE /*---*/ (37)
+	#define SELECTED_CLIENT_BACKGROUND_VARIABLE /*------*/ (38)
+	#define SELECTED_TITLE_FOREGROUND_VARIABLE /*-------*/ (39)
+	#define SELECTED_TITLE_BACKGROUND_VARIABLE /*-------*/ (40)
+	#define TITLE_TEXT_CUTOFF_VARIABLE /*---------------*/ (41)
+	#define TITLE_TEXT_HORIZONTAL_ALIGNMENT_VARIABLE /*-*/ (42)
+	#define TITLE_TEXT_VERTICAL_ALIGNMENT_VARIABLE /*---*/ (43)
+	#define SELECTED_CLIENT_VARIABLE /*-----------------*/ (44)
+	#define SELECTION_ACTION_VARIABLE /*----------------*/ (45)
+	#define WINDOW_CIRCLE_RADIUS_VARIABLE /*------------*/ (46)
 
-	#define EMPTY_SHARED_STATUS /*--------------------*/ (0)
-	#define FULL_SHARED_STATUS /*---------------------*/ (1)
+	#define EMPTY_SHARED_STATUS /*----------------------*/ (0)
+	#define FULL_SHARED_STATUS /*-----------------------*/ (1)
 
-	#define NONE_ROTATION /*--------------------------*/ (0)
-	#define DEGREE_90_ROTATION /*---------------------*/ (1)
-	#define DEGREE_180_ROTATION /*--------------------*/ (2)
-	#define DEGREE_270_ROTATION /*--------------------*/ (3)
+	#define NONE_ROTATION /*----------------------------*/ (0)
+	#define DEGREE_90_ROTATION /*-----------------------*/ (1)
+	#define DEGREE_180_ROTATION /*----------------------*/ (2)
+	#define DEGREE_270_ROTATION /*----------------------*/ (3)
 
-	#define NONE_NORMAL_HINT /*-----------------------*/ (b(0000000000))
-	#define USER_POSITION_NORMAL_HINT /*--------------*/ (b(0000000001))
-	#define USER_SIZE_NORMAL_HINT /*------------------*/ (b(0000000010))
-	#define PROGRAM_POSITION_NORMAL_HINT /*-----------*/ (b(0000000100))
-	#define PROGRAM_SIZE_NORMAL_HINT /*---------------*/ (b(0000001000))
-	#define PROGRAM_MINIMUM_SIZE_NORMAL_HINT /*-------*/ (b(0000010000))
-	#define PROGRAM_MAXIMUM_SIZE_NORMAL_HINT /*-------*/ (b(0000100000))
-	#define PROGRAM_RESIZE_INCREMENT_NORMAL_HINT /*---*/ (b(0001000000))
-	#define PROGRAM_ASPECT_NORMAL_HINT /*-------------*/ (b(0010000000))
-	#define PROGRAM_BASE_SIZE_NORMAL_HINT /*----------*/ (b(0100000000))
-	#define PROGRAM_WINDOW_GRAVITY_NORMAL_HINT /*-----*/ (b(1000000000))
+	#define NONE_NORMAL_HINT /*-------------------------*/ (b(0000000000))
+	#define USER_POSITION_NORMAL_HINT /*----------------*/ (b(0000000001))
+	#define USER_SIZE_NORMAL_HINT /*--------------------*/ (b(0000000010))
+	#define PROGRAM_POSITION_NORMAL_HINT /*-------------*/ (b(0000000100))
+	#define PROGRAM_SIZE_NORMAL_HINT /*-----------------*/ (b(0000001000))
+	#define PROGRAM_MINIMUM_SIZE_NORMAL_HINT /*---------*/ (b(0000010000))
+	#define PROGRAM_MAXIMUM_SIZE_NORMAL_HINT /*---------*/ (b(0000100000))
+	#define PROGRAM_RESIZE_INCREMENT_NORMAL_HINT /*-----*/ (b(0001000000))
+	#define PROGRAM_ASPECT_NORMAL_HINT /*---------------*/ (b(0010000000))
+	#define PROGRAM_BASE_SIZE_NORMAL_HINT /*------------*/ (b(0100000000))
+	#define PROGRAM_WINDOW_GRAVITY_NORMAL_HINT /*-------*/ (b(1000000000))
 
-	#define NONE_HINT /*------------------------------*/ (b(000000000))
-	#define INPUT_HINT /*-----------------------------*/ (b(000000001))
-	#define STATE_HINT /*-----------------------------*/ (b(000000010))
-	#define ICON_PIXMAP_HINT /*-----------------------*/ (b(000000100))
-	#define ICON_WINDOW_HINT /*-----------------------*/ (b(000001000))
-	#define ICON_POSITION_HINT /*---------------------*/ (b(000010000))
-	#define ICON_MASK_HINT /*-------------------------*/ (b(000100000))
-	#define WINDOW_GROUP_HINT /*----------------------*/ (b(001000000))
-	#define URGENCY_HINT /*---------------------------*/ (b(100000000))
+	#define NONE_HINT /*--------------------------------*/ (b(000000000))
+	#define INPUT_HINT /*-------------------------------*/ (b(000000001))
+	#define STATE_HINT /*-------------------------------*/ (b(000000010))
+	#define ICON_PIXMAP_HINT /*-------------------------*/ (b(000000100))
+	#define ICON_WINDOW_HINT /*-------------------------*/ (b(000001000))
+	#define ICON_POSITION_HINT /*-----------------------*/ (b(000010000))
+	#define ICON_MASK_HINT /*---------------------------*/ (b(000100000))
+	#define WINDOW_GROUP_HINT /*------------------------*/ (b(001000000))
+	#define URGENCY_HINT /*-----------------------------*/ (b(100000000))
 
-	#define WITHDRAWN_STATE /*------------------------*/ (0)
-	#define NORMAL_STATE /*---------------------------*/ (1)
-	#define ICON_STATE /*-----------------------------*/ (3)
+	#define WITHDRAWN_STATE /*--------------------------*/ (0)
+	#define NORMAL_STATE /*-----------------------------*/ (1)
+	#define ICON_STATE /*-------------------------------*/ (3)
 
-	#define QUIT() /*---------------------------------*/ local void             quit(int signal)
-	#define GETSHAREDCHARACTER() /*-------------------*/ local int              getSharedCharacter(FILE *const configFile)
-	#define INITMEMORYMANAGER() /*--------------------*/ local bool             initMemoryManager(void)
-	#define PUSHPOINTER() /*--------------------------*/ local uint32          _pushPointer(void *const pointer, const char *const label, int (*const freeFunction)(void *))
-	#define POPPOINTER() /*---------------------------*/ local void             popPointer(const uint32 token)
-	#define UPDATEPOINTER() /*------------------------*/ local void             updatePointer(const uint32 token, void *const pointer)
-	#define DELETEMEMORYMANAGER() /*------------------*/ local void             deleteMemoryManager(void)
-	#define IFREE() /*--------------------------------*/ local int              iFree(void *const pointer)
-	#define ISHMCTL() /*------------------------------*/ local int              ishmctl(void *const pointer)
-	#define IXCBDISCONNECT() /*-----------------------*/ local int              iXCBDisconnect(void *const pointer)
-	#define SHMINIT() /*------------------------------*/ local void             shmInit(void)
-	#define SHMCONNECT() /*---------------------------*/ local void             shmConnect(void)
-	#define SHMMAIN() /*------------------------------*/ local void *           shmMain(void *const arg)
-	#define SHMDISCONNECT() /*------------------------*/ local void             shmDisconnect(void)
-	#define IDENTIFYARGUMENT() /*---------------------*/ local uint8            identifyArgument(const char *p)
-	#define INSENSITIVESTRINGCOMPARE() /*-------------*/ local bool             insensitiveStringCompare(const char *s0, const char *s1)
-	#define SENSITIVESTRINGCOMPARE() /*---------------*/ local bool             sensitiveStringCompare(const char *s0, const char *s1)
-	#define SETSTRINGROOT() /*------------------------*/ local void             setStringRoot(StringNodeRoot *root)
-	#define BULKINSERTSTRING() /*---------------------*/ local void             bulkInsertString(StringNodeRoot *root, const char *const *current)
-	#define INSERTSTRING() /*-------------------------*/ local bool             insertString(StringNodeRoot *root, const char *string)
-	#define GETSTRINGNODE() /*------------------------*/ local StringNode *     getStringNode(StringNodeRoot *const root, const char **const stringReturn)
-	#define DELETESTRINGROOT() /*---------------------*/ local void             deleteStringRoot(StringNodeRoot *root)
-	#define SETSHORTCUTROOT() /*----------------------*/ local void             setShortcutRoot(ShortcutNodeRoot *root)
-	#define INSERTSHORTCUT() /*-----------------------*/ local bool             insertShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier, const uint8 command, char *const string, const uint stringToken, const int32 field0, const int32 field1, const int32 field2, const int32 field3, const int32 field4)
-	#define GETNEXTSHORTCUT() /*----------------------*/ local bool             getNextShortcut(const ShortcutNodeRoot *const root, uint8 code, uint16 modifier, int *const nextOffset)
-	#define REMOVESHORTCUT() /*-----------------------*/ local bool             removeShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier)
-	#define UNSETSHORTCUTROOT() /*--------------------*/ local void             unsetShortcutRoot(ShortcutNodeRoot *root)
-	#define UNGRABSHORTCUTS() /*----------------------*/ local void             ungrabShortcuts(void)
-	#define SETCONFIGVARIABLES() /*-------------------*/ local void             setConfigVariables(void)
-	#define READCONFIG() /*---------------------------*/ local void             readConfig(const bool createConfigFile, const char *const configPath, int (*getConfigChar)(FILE *file))
-	#define MATCHNAMELIST() /*------------------------*/ local uint8            matchNameList(StringNodeRoot *const root, const char *const statementWall, char **statementCurrentReturn, uint8 *const valueReturn)
-	#define MATCHINTEGER() /*-------------------------*/ local uint8            matchInteger(char **statementCurrent, const char *const statementWall, int64 *const returnValue)
-	#define MATCHSTRING() /*--------------------------*/ local bool             matchString(char **statementCurrent, char **stringReturn, uint32 *stringToken)
-	#define MATCHEXECUTE() /*-------------------------*/ local bool             matchExecute(char **statementCurrent, char **executeReturn, uint32 *executeToken)
-	#define READIMAGE() /*----------------------------*/ local uint8            readImage(const char *const path, const char **errorMessage, Image *image)
-	#define FREECONFIGVARIABLES() /*------------------*/ local void             freeConfigVariables(void)
-	#define EXEC() /*---------------------------------*/ local void             exec(const char *const string)
-	#define SETMEMORY() /*----------------------------*/ local void             setMemory(void *const destinationStart, const uint64 value, const uint itemAmount, const uint8 perByteAmount)
-	#define COPYMEMORY() /*---------------------------*/ local void             copyMemory(void *const sourceStart, void *const destinationStart, const uint byteAmount)
-	#define FINDSTRINGLENGTH() /*---------------------*/ local uint             findStringLength(const void *string)
-	#define UTF8TOUCS2() /*---------------------------*/ local uint             UTF8ToUCS2(const uint8 *utf8, uint16 *const ucs2Start, const int ucs2Length)
-	#define GETTIMESTAMP() /*-------------------------*/ local xcb_timestamp_t  getTimestamp(void)
-	#define GETPOINTERMONITOR() /*--------------------*/ local Monitor *        getPointerMonitor(void)
-	#define GETWINDOWMONITOR() /*---------------------*/ local Monitor *        getWindowMonitor(const xcb_window_t window)
-	#define CREATECIRCLE() /*-------------------------*/ local bool             createCircle(const int radius, const uint32 color, Image *image)
-	#define COMPOSITEIMAGES() /*----------------------*/ local void             compositeImages(void (*operation)(const uint32 *const, uint32 *const), const int sourceX, const int sourceY, Image *const source, int destinationX, int destinationY, Image *const destination)
-	#define COMPOSITEIMAGESOVER() /*------------------*/ local void             compositeImagesOver(const uint32 *const source, uint32 *const destination)
-	#define COMPOSITEIMAGESAND() /*-------------------*/ local void             compositeImagesAnd(const uint32 *const source, uint32 *const destination)
-	#define TWOPASSBOXBLUR() /*-----------------------*/ local void             twoPassBoxBlur(const int width, const int height, const int boxSize, uint32 *destinationData)
-	#define ROTATEIMAGE() /*--------------------------*/ local bool             rotateImage(const uint8 rotation, Image *const image, const bool deletePreviousData)
-	#define FILLDRAWABLE() /*-------------------------*/ local void             fillDrawable(const xcb_drawable_t drawable, const xcb_gcontext_t gc, const int16 x, const int16 y, const uint16 width, const uint16 height, const uint32 color)
-	#define RESTARTCOMMAND() /*-----------------------*/ local void             restartCommand(void)
-	#define EXITCOMMAND() /*--------------------------*/ local void             exitCommand(void)
-	#define CANCELTHREADS() /*------------------------*/ local void             cancelThreads(void)
-	#define FREEMONITORS() /*-------------------------*/ local void             freeMonitors(void)
-	#define PRINTUNACCOUNTEDFORPOINTERS() /*----------*/ local void             printUnaccountedForPointers(const Pointer *current, const Pointer *wall)
-	#define PRINTERROR() /*---------------------------*/ local void             printError(const char *const message, ...)
-	#define PRINTTITLEDERROR() /*---------------------*/ local void             printTitledError(const char *const title, const char *const message)
-	#define PRINTTITLEDQUOTEDERROR() /*---------------*/ local void             printTitledQuotedError(const char *const title, const char *const argument, const char *const message)
-	#define PRINTCONNECTIONERROR() /*-----------------*/ local void             printConnectionError(void)
-	#define PRINTTITLEDNAMEDERROR() /*----------------*/ local void             printTitledNamedError(const char *const title, const char *const message, const char *const name)
-	#define PRINTXERROR() /*--------------------------*/ local void             printXError(const char *const *const name)
-	#define PRINTTITLEDVALUEDERROR() /*---------------*/ local void             printTitledValuedError(const char *const title, const char *const message, const uint value)
-	#define PRINTCONFIGERROR() /*---------------------*/ local void             printConfigError(const char *const type, const char *const message, const char finalStatementCharacter, const bool printLine, const bool printConfig, const bool printPointer, const bool printPattern, const char *const configPath, const uint statementLine, const char *const statementStart, const char *const statementWall, const Instruction *instructionStart, const Instruction *instructionCurrent, StringNodeRoot *const *const instructionDataStart, const char *const *currentScopeInstructionList, const StringNodeRoot *const currentScopeInstructionRoot)
-	#define OPENERRORSTREAM() /*----------------------*/ local bool             openErrorStream(void)
-	#define CLOSEERRORSTREAM() /*---------------------*/ local void             closeErrorStream(void)
+	#define QUIT() /*-----------------------------------*/ local void             quit(int signal)
+	#define GETSHAREDCHARACTER() /*---------------------*/ local int              getSharedCharacter(FILE *const configFile)
+	#define INITMEMORYMANAGER() /*----------------------*/ local bool             initMemoryManager(void)
+	#define PUSHPOINTER() /*----------------------------*/ local uint32          _pushPointer(void *const pointer, const char *const label, int (*const freeFunction)(void *))
+	#define POPPOINTER() /*-----------------------------*/ local void             popPointer(const uint32 token)
+	#define UPDATEPOINTER() /*--------------------------*/ local void             updatePointer(const uint32 token, void *const pointer)
+	#define DELETEMEMORYMANAGER() /*--------------------*/ local void             deleteMemoryManager(void)
+	#define IFREE() /*----------------------------------*/ local int              iFree(void *const pointer)
+	#define ISHMCTL() /*--------------------------------*/ local int              ishmctl(void *const pointer)
+	#define IXCBDISCONNECT() /*-------------------------*/ local int              iXCBDisconnect(void *const pointer)
+	#define SHMINIT() /*--------------------------------*/ local void             shmInit(void)
+	#define SHMCONNECT() /*-----------------------------*/ local void             shmConnect(void)
+	#define SHMMAIN() /*--------------------------------*/ local void *           shmMain(void *const arg)
+	#define SHMDISCONNECT() /*--------------------------*/ local void             shmDisconnect(void)
+	#define IDENTIFYARGUMENT() /*-----------------------*/ local uint8            identifyArgument(const char *p)
+	#define INSENSITIVESTRINGCOMPARE() /*---------------*/ local bool             insensitiveStringCompare(const char *s0, const char *s1)
+	#define SENSITIVESTRINGCOMPARE() /*-----------------*/ local bool             sensitiveStringCompare(const char *s0, const char *s1)
+	#define SETSTRINGROOT() /*--------------------------*/ local void             setStringRoot(StringNodeRoot *root)
+	#define BULKINSERTSTRING() /*-----------------------*/ local void             bulkInsertString(StringNodeRoot *root, const char *const *current)
+	#define INSERTSTRING() /*---------------------------*/ local bool             insertString(StringNodeRoot *root, const char *string)
+	#define GETSTRINGNODE() /*--------------------------*/ local StringNode *     getStringNode(StringNodeRoot *const root, const char **const stringReturn)
+	#define DELETESTRINGROOT() /*-----------------------*/ local void             deleteStringRoot(StringNodeRoot *root)
+	#define SETSHORTCUTROOT() /*------------------------*/ local void             setShortcutRoot(ShortcutNodeRoot *root)
+	#define INSERTSHORTCUT() /*-------------------------*/ local bool             insertShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier, const uint8 command, char *const string, const uint stringToken, const int32 field0, const int32 field1, const int32 field2, const int32 field3, const int32 field4)
+	#define GETNEXTSHORTCUT() /*------------------------*/ local bool             getNextShortcut(const ShortcutNodeRoot *const root, uint8 code, uint16 modifier, int *const nextOffset)
+	#define REMOVESHORTCUT() /*-------------------------*/ local bool             removeShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier)
+	#define UNSETSHORTCUTROOT() /*----------------------*/ local void             unsetShortcutRoot(ShortcutNodeRoot *root)
+	#define UNGRABSHORTCUTS() /*------------------------*/ local void             ungrabShortcuts(void)
+	#define SETCONFIGVARIABLES() /*---------------------*/ local void             setConfigVariables(void)
+	#define READCONFIG() /*-----------------------------*/ local void             readConfig(const bool createConfigFile, const char *const configPath, int (*getConfigChar)(FILE *file))
+	#define MATCHNAMELIST() /*--------------------------*/ local uint8            matchNameList(StringNodeRoot *const root, const char *const statementWall, char **statementCurrentReturn, uint8 *const valueReturn)
+	#define MATCHINTEGER() /*---------------------------*/ local uint8            matchInteger(char **statementCurrent, const char *const statementWall, int64 *const returnValue)
+	#define MATCHSTRING() /*----------------------------*/ local bool             matchString(char **statementCurrent, char **stringReturn, uint32 *stringToken)
+	#define MATCHEXECUTE() /*---------------------------*/ local bool             matchExecute(char **statementCurrent, char **executeReturn, uint32 *executeToken)
+	#define READIMAGE() /*------------------------------*/ local uint8            readImage(const char *const path, const char **errorMessage, Image *image)
+	#define FREECONFIGVARIABLES() /*--------------------*/ local void             freeConfigVariables(void)
+	#define EXEC() /*-----------------------------------*/ local void             exec(const char *const string)
+	#define SETMEMORY() /*------------------------------*/ local void             setMemory(void *const destinationStart, const uint64 value, const uint itemAmount, const uint8 perByteAmount)
+	#define COPYMEMORY() /*-----------------------------*/ local void             copyMemory(void *const sourceStart, void *const destinationStart, const uint byteAmount)
+	#define FINDSTRINGLENGTH() /*-----------------------*/ local uint             findStringLength(const void *string)
+	#define UTF8TOUCS2() /*-----------------------------*/ local uint             UTF8ToUCS2(const uint8 *utf8, uint16 *const ucs2Start, const int ucs2Length)
+	#define GETTIMESTAMP() /*---------------------------*/ local xcb_timestamp_t  getTimestamp(void)
+	#define GETPOINTERMONITOR() /*----------------------*/ local Monitor *        getPointerMonitor(void)
+	#define GETWINDOWMONITOR() /*-----------------------*/ local Monitor *        getWindowMonitor(const xcb_window_t window)
+	#define CREATECIRCLE() /*---------------------------*/ local bool             createCircle(const int radius, const uint32 color, Image *image)
+	#define COMPOSITEIMAGES() /*------------------------*/ local void             compositeImages(void (*operation)(const uint32 *const, uint32 *const), const int sourceX, const int sourceY, Image *const source, int destinationX, int destinationY, Image *const destination)
+	#define COMPOSITEIMAGESOVER() /*--------------------*/ local void             compositeImagesOver(const uint32 *const source, uint32 *const destination)
+	#define COMPOSITEIMAGESAND() /*---------------------*/ local void             compositeImagesAnd(const uint32 *const source, uint32 *const destination)
+	#define TWOPASSBOXBLUR() /*-------------------------*/ local void             twoPassBoxBlur(const int width, const int height, const int boxSize, uint32 *destinationData)
+	#define ROTATEIMAGE() /*----------------------------*/ local bool             rotateImage(const uint8 rotation, Image *const image, const bool deletePreviousData)
+	#define FILLDRAWABLE() /*---------------------------*/ local void             fillDrawable(const xcb_drawable_t drawable, const xcb_gcontext_t gc, const int16 x, const int16 y, const uint16 width, const uint16 height, const uint32 color)
+	#define RESTARTCOMMAND() /*-------------------------*/ local void             restartCommand(void)
+	#define EXITCOMMAND() /*----------------------------*/ local void             exitCommand(void)
+	#define CANCELTHREADS() /*--------------------------*/ local void             cancelThreads(void)
+	#define FREEMONITORS() /*---------------------------*/ local void             freeMonitors(void)
+	#define PRINTUNACCOUNTEDFORPOINTERS() /*------------*/ local void             printUnaccountedForPointers(const Pointer *current, const Pointer *wall)
+	#define PRINTERROR() /*-----------------------------*/ local void             printError(const char *const message, ...)
+	#define PRINTTITLEDERROR() /*-----------------------*/ local void             printTitledError(const char *const title, const char *const message)
+	#define PRINTTITLEDQUOTEDERROR() /*-----------------*/ local void             printTitledQuotedError(const char *const title, const char *const argument, const char *const message)
+	#define PRINTCONNECTIONERROR() /*-------------------*/ local void             printConnectionError(void)
+	#define PRINTTITLEDNAMEDERROR() /*------------------*/ local void             printTitledNamedError(const char *const title, const char *const message, const char *const name)
+	#define PRINTXERROR() /*----------------------------*/ local void             printXError(const char *const *const name)
+	#define PRINTTITLEDVALUEDERROR() /*-----------------*/ local void             printTitledValuedError(const char *const title, const char *const message, const uint value)
+	#define PRINTCONFIGERROR() /*-----------------------*/ local void             printConfigError(const char *const type, const char *const message, const char finalStatementCharacter, const bool printLine, const bool printConfig, const bool printPointer, const bool printPattern, const char *const configPath, const uint statementLine, const char *const statementStart, const char *const statementWall, const Instruction *instructionStart, const Instruction *instructionCurrent, StringNodeRoot *const *const instructionDataStart, const char *const *currentScopeInstructionList, const StringNodeRoot *const currentScopeInstructionRoot)
+	#define OPENERRORSTREAM() /*------------------------*/ local bool             openErrorStream(void)
+	#define CLOSEERRORSTREAM() /*-----------------------*/ local void             closeErrorStream(void)
 
-	#define xcb_wait_for_reply(a, b, c) /*------------*/ (xcb_wait_for_reply(a, (b).sequence, c))
-	#define xcb_discard_reply(a, b) /*----------------*/ (xcb_discard_reply(a, (b).sequence))
-	#define xcb_send_event(a, b, c, d, e) /*----------*/ (xcb_send_event(a, b, c, d, (void *)(e)))
-	#define xcb_send_event_checked(a, b, c, d, e) /*--*/ (xcb_send_event_checked(a, b, c, d, (void *)(e)))
+	#define xcb_wait_for_reply(a, b, c) /*--------------*/ (xcb_wait_for_reply(a, (b).sequence, c))
+	#define xcb_discard_reply(a, b) /*------------------*/ (xcb_discard_reply(a, (b).sequence))
+	#define xcb_send_event(a, b, c, d, e) /*------------*/ (xcb_send_event(a, b, c, d, (void *)(e)))
+	#define xcb_send_event_checked(a, b, c, d, e) /*----*/ (xcb_send_event_checked(a, b, c, d, (void *)(e)))
 
-	#define SELF(self) /*-----------------------------*/ self
-	#define STRING_ARRAY_SIZE(a) /*-------------------*/ (countof(a) - 1)
+	#define SELF(self) /*-------------------------------*/ self
+	#define STRING_ARRAY_SIZE(a) /*---------------------*/ (countof(a) - 1)
 
-	#define pushPointer(a, b, c) /*-------------------*/ (_pushPointer(a, b, (int (*const)(void *))(c)))
-	#define findString(a, b) /*-----------------------*/ (!getStringNode(a, (const char **const)(b)))
+	#define pushPointer(a, b, c) /*---------------------*/ (_pushPointer(a, b, (int (*const)(void *))(c)))
+	#define findString(a, b) /*-------------------------*/ (!getStringNode(a, (const char **const)(b)))
 
 	#if DEBUG
 		#define printXEvent(n) /*--*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %s%s:%s %s\n", colorStart, programName, colorEvent \
@@ -586,9 +595,9 @@ SOFTWARE. */
 	def struct{
 		uint8 * /*-------------*/ titleStart;
 		uint32 /*--------------*/ titleToken;
+		uint32 /*--------------*/ titleLength;
 		xcb_atom_t /*----------*/ titleProperty;
 		xcb_window_t /*--------*/ window;
-		uint8 /*---------------*/ pad0[4];
 	} Client;
 
 
@@ -768,13 +777,19 @@ SOFTWARE. */
 		, "font"
 		, "window-background"
 		, "selection-background"
-		, "selected-selection-background"
 		, "client-background"
 		, "title-foreground"
 		, "title-background"
+		, "selected-selection-background"
+		, "selected-client-background"
+		, "selected-title-foreground"
+		, "selected-title-background"
 		, "title-text-cutoff"
+		, "title-text-horizontal-alignment"
+		, "title-text-vertical-alignment"
 		, "selected-client"
 		, "selection-action"
+		, "window-circle-radius"
 		, NULL
 	};
 	local const char *const /*------------*/ modifierList[] = {
@@ -918,13 +933,19 @@ SOFTWARE. */
 	local const Instruction /*------------*/ fontSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, STRING_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ windowBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ selectionBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
-	local const Instruction /*------------*/ selectedSelectionBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ clientBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ titleForegroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ titleBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ selectedSelectionBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ selectedClientBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ selectedTitleForegroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ selectedTitleBackgroundSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ titleTextCutoffSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ titleTextHorizontalAlignmentSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ titleTextVerticalAlignmentSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ selectedClientSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ selectionActionSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ windowCircleRadiusSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ executeGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, EXECUTE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ executeGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, EXECUTE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 
@@ -974,13 +995,19 @@ SOFTWARE. */
 	local StringNodeRoot *const /*--------*/ fontSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ windowBackgroundSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ selectionBackgroundSetSubinstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ selectedSelectionBackgroundSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ clientBackgroundSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ titleForegroundSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ titleBackgroundSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ selectedSelectionBackgroundSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ selectedClientBackgroundSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ selectedTitleForegroundSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ selectedTitleBackgroundSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ titleTextCutoffSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ titleTextHorizontalAlignmentSetSubinstructionData[] = {&variableRoot, &horizontalAlignmentRoot};
+	local StringNodeRoot *const /*--------*/ titleTextVerticalAlignmentSetSubinstructionData[] = {&variableRoot, &verticalAlignmentRoot};
 	local StringNodeRoot *const /*--------*/ selectedClientSetSubinstructionData[] = {&variableRoot, &selectedClientRoot};
 	local StringNodeRoot *const /*--------*/ selectionActionSetSubinstructionData[] = {&variableRoot, &selectionActionRoot};
+	local StringNodeRoot *const /*--------*/ windowCircleRadiusSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ executeGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
 	local StringNodeRoot *const /*--------*/ executeGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
 
@@ -1119,11 +1146,6 @@ SOFTWARE. */
 #define POINTER_WHICH_MONITOR /*--------------------*/ (1)
 #define FOCUSED_WINDOW_WHICH_MONITOR /*-------------*/ (2)
 
-#define NONE_CLIENTS_SHOWN /*-----------------------*/ (0)
-#define MONITOR_CLIENTS_SHOWN /*--------------------*/ (1)
-#define WORKSPACE_CLIENTS_SHOWN /*------------------*/ (2)
-#define ALL_CLIENTS_SHOWN /*------------------------*/ (3)
-
 #define NONE_HORIZONTAL_SELECTION_ORDER /*----------*/ (0)
 #define LEFT_TO_RIGHT_HORIZONTAL_SELECTION_ORDER /*-*/ (1)
 #define RIGHT_TO_LEFT_HORIZONTAL_SELECTION_ORDER /*-*/ (2)
@@ -1170,7 +1192,7 @@ SOFTWARE. */
 	local int /*--------------------------*/ selectionColumnSize;    /*!*/
 	local int /*--------------------------*/ maxSelectionColumnSize; /*!*/
 
-	local xcb_pixmap_t /*-----------------*/ circlePixmap;           /*!*/
+	local xcb_pixmap_t /*-----------------*/ circlePixmap;
 
 
 
@@ -1221,17 +1243,20 @@ SOFTWARE. */
 
 	local uint32 /*-----------------------*/ windowBackground;
 	local uint32 /*-----------------------*/ selectionBackground;
-	local uint32 /*-----------------------*/ selectedSelectionBackground;
 	local uint32 /*-----------------------*/ clientBackground;
 	local uint32 /*-----------------------*/ titleForeground;
 	local uint32 /*-----------------------*/ titleBackground;
+	local uint32 /*-----------------------*/ selectedSelectionBackground;
+	local uint32 /*-----------------------*/ selectedClientBackground;
+	local uint32 /*-----------------------*/ selectedTitleForeground;
+	local uint32 /*-----------------------*/ selectedTitleBackground;
 
 	local uint /*-------------------------*/ titleTextCutoff;
-	local uint8 /*------------------------*/ selectedClient = FIRST_SELECTED_CLIENT;
+	local uint8 /*------------------------*/ titleTextHorizontalAlignment;
+	local uint8 /*------------------------*/ titleTextVerticalAlignment;
+	local uint8 /*------------------------*/ selectedClient;
 	local uint8 /*------------------------*/ selectionAction;
-
-	local uint /*-------------------------*/ circleRadius; /*!*/
-
+	local uint /*-------------------------*/ windowCircleRadius;
 
 
 
@@ -1240,10 +1265,6 @@ SOFTWARE. */
 
 
 
-	local uint8 /*------------------------*/ titleTextHorizontalAlignment; /*!*/
-	local uint8 /*------------------------*/ titleTextVerticalAlignment;   /*!*/
-
-	local uint8 /*------------------------*/ clientsShown;                 /*!*/
 
 	local uint8 /*------------------------*/ horizontalSelectionOrder;     /*! none/left to right/right to left */
 	local uint8 /*------------------------*/ verticalSelectionOrder;       /*! none/up to down/down to up */
@@ -1419,63 +1440,46 @@ GETCLIENTTITLE(){
 	ret false;
 }
 COPYCLIENTTITLE(){
-	const uint lengthCopy = length;
+	#define ASCII_TO_UCS2(c) /*-*/ (c << 8)
 	uint8 *titleStart;
 	uint32 titleToken;
+	uint16 ucs2[1024];
 	if(!length){
 		ret false;
 	}
+	titleStart = malloc((length + 1) * sizeof(uint8));
+	titleToken = pushPointer(titleStart, "window title value pointer", iFree);
+	if(!titleStart){
+		ret false;
+	}
+	copyMemory(valueStart, titleStart, length * sizeof(uint8));
+	*(titleStart + length) = '\0';
+	length = UTF8ToUCS2(titleStart, ucs2, countof(ucs2));
 	if(titleTextCutoff and length > titleTextCutoff){
 		length = titleTextCutoff;
+		*(ucs2 + length - 3) = ASCII_TO_UCS2('.');
+		*(ucs2 + length - 2) = ASCII_TO_UCS2('.');
+		*(ucs2 + length - 1) = ASCII_TO_UCS2('.');
 	}
-	titleStart = malloc((length + 1) * sizeof(uint8));
-	titleToken = pushPointer(titleStart, "window title pointer", iFree);
-	if(titleStart){
-		copyMemory(valueStart, titleStart, length);
-		if(property == atom._NET_WM_NAME or property == atom._NET_WM_VISIBLE_NAME){
-
-
-
-
-
-
-
-
-
-			/*!
-				this may break a utf8 char and make us print a fake one. even checking the length is wrong. even the sizeof() in the malloc is a problem.
-
-				we need to make a function to recognize utf8 chars and remove them.
-			*/
-
-			if(lengthCopy > length){
-				*(titleStart + length - 3) = '.';
-				*(titleStart + length - 2) = '.';
-				*(titleStart + length - 1) = '.';
-			}
-
-
-
-
-
-
-
-
-
-		}else{
-			if(lengthCopy > length){
-				*(titleStart + length - 3) = '.';
-				*(titleStart + length - 2) = '.';
-				*(titleStart + length - 1) = '.';
-			}
+	{
+		void *const temp = realloc(titleStart, (length + 1) * sizeof(uint16));
+		updatePointer(titleToken, temp);
+		if(!temp){
+			printTitledError("client title error", "could not store client title");
+			free(titleStart);
+			popPointer(titleToken);
+			ret false;
 		}
-		*(titleStart + length) = '\0';
-		(*client).titleStart = titleStart;
-		(*client).titleToken = titleToken;
-		(*client).titleProperty = property;
-		ret true;
+		titleStart = temp;
 	}
-	ret false;
+	copyMemory(ucs2, titleStart, length * sizeof(uint16));
+	*(ucs2 + length) = ASCII_TO_UCS2('\0');
+	(*client).titleStart = titleStart;
+	(*client).titleToken = titleToken;
+	(*client).titleLength = length;
+	(*client).titleProperty = property;
+	ret true;
+	#undef  ASCII_TO_UCS2
 }
 FINDCLIENTLISTWINDOW(){
 	if(clientListSize){
@@ -1526,15 +1530,6 @@ SHOWWINDOW(){
 		valueList.height = rectangle.height;
 		valueList.stackMode = XCB_STACK_MODE_ABOVE;
 		if(clientOrder){
-
-
-
-
-
-
-
-
-
 			switch selectedClient over
 				to FIRST_SELECTED_CLIENT:{
 					currentSelection = 0;
@@ -1564,15 +1559,6 @@ SHOWWINDOW(){
 					brk;
 				}
 			end
-
-
-
-
-
-
-
-
-
 		}
 		xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &userTime);
 		xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_STACK_MODE, &valueList);
@@ -1661,23 +1647,34 @@ SETWINDOWPROPERTIES(){
 }
 DRAWWINDOW(){
 
+
+
 	/*!
 		margin : spacing between selections
 		padding: spacing between selection border and content MBR
 		gap    : spacing between contents
 	*/
+	ElementRectangle _windowRectangle;
+	ElementRectangle clientRectangle;
+	ElementRectangle titleRectangle;
+	uint localClientWidth;
+	uint localClientHeight;
+	uint localTitleWidth;
+	uint localTitleHeight;
+
+
+
+
+
+
 
 
 
 	/*!*/
 
-	uint localClientWidth;
-	uint localClientHeight;
 	uint localClientX;
 	uint localClientY;
 
-	uint localTitleWidth;
-	uint localTitleHeight;
 	uint localTitleX;
 	uint localTitleY;
 
@@ -1698,9 +1695,6 @@ DRAWWINDOW(){
 
 
 
-	ElementRectangle _windowRectangle;
-	ElementRectangle clientRectangle;
-	ElementRectangle titleRectangle;
 	jmp getRectangles;
 	getRectangles:{
 		if(!windowRectangle){
@@ -1714,6 +1708,10 @@ DRAWWINDOW(){
 		jmp calculate; /*! rename */
 	}
 	calculate:{
+		localClientWidth = clientRectangle.width;
+		localClientHeight = clientRectangle.height;
+		localTitleWidth = titleRectangle.width;
+		localTitleHeight = titleRectangle.height;
 
 
 
@@ -1725,20 +1723,16 @@ DRAWWINDOW(){
 
 		/*!*/
 
-		localClientWidth = clientRectangle.width;
-		localClientHeight = clientRectangle.height;
 		localClientX = selectionMargin + selectionPadding;
 		localClientY = selectionMargin + selectionPadding;
 
-		localTitleWidth = titleRectangle.width;
-		localTitleHeight = titleRectangle.height;
 		localTitleX = selectionMargin + selectionPadding;
 		localTitleY = localClientY + localClientHeight + selectionGap;
 
 		localSelectionWidth = (localClientWidth > localTitleWidth? localClientWidth : localTitleWidth) + 2 * selectionPadding;
 		localSelectionHeight = localClientHeight + selectionGap + localTitleHeight + 2 * selectionPadding;
-		localSelectionX = selectionMargin;
-		localSelectionY = selectionMargin;
+		localSelectionX = selectionMargin; /*! this is if they start from the left */
+		localSelectionY = selectionMargin; /*! this is if they start from the top */
 
 		localSelectionOffsetX = localSelectionWidth + selectionMargin;
 		localSelectionOffsetY = 0;
@@ -1757,10 +1751,12 @@ DRAWWINDOW(){
 	}
 	drawWindow:{
 		fillDrawable(pixmap, gc, 0, 0, (*windowRectangle).width, (*windowRectangle).height, windowBackground);
-		xcb_copy_area(connection, circlePixmap, pixmap, gc, 0           , 0           , 0                                          , 0                                          , circleRadius + 1, circleRadius + 1);
-		xcb_copy_area(connection, circlePixmap, pixmap, gc, circleRadius, 0           , (*windowRectangle).width - circleRadius - 1, 0                                           , circleRadius + 1, circleRadius + 1);
-		xcb_copy_area(connection, circlePixmap, pixmap, gc, 0           , circleRadius, 0                                          , (*windowRectangle).height - circleRadius - 1, circleRadius + 1, circleRadius + 1);
-		xcb_copy_area(connection, circlePixmap, pixmap, gc, circleRadius, circleRadius, (*windowRectangle).width - circleRadius - 1, (*windowRectangle).height - circleRadius - 1, circleRadius + 1, circleRadius + 1);
+		if(circlePixmap){
+			xcb_copy_area(connection, circlePixmap, pixmap, gc, 0                 , 0                 , 0                                                , 0                                                 , windowCircleRadius + 1, windowCircleRadius + 1);
+			xcb_copy_area(connection, circlePixmap, pixmap, gc, windowCircleRadius, 0                 , (*windowRectangle).width - windowCircleRadius - 1, 0                                                 , windowCircleRadius + 1, windowCircleRadius + 1);
+			xcb_copy_area(connection, circlePixmap, pixmap, gc, 0                 , windowCircleRadius, 0                                                , (*windowRectangle).height - windowCircleRadius - 1, windowCircleRadius + 1, windowCircleRadius + 1);
+			xcb_copy_area(connection, circlePixmap, pixmap, gc, windowCircleRadius, windowCircleRadius, (*windowRectangle).width - windowCircleRadius - 1, (*windowRectangle).height - windowCircleRadius - 1, windowCircleRadius + 1, windowCircleRadius + 1);
+		}
 		if(clientOrder){
 			jmp drawSelections;
 		}
@@ -1796,61 +1792,59 @@ DRAWWINDOW(){
 		drawSelectionLoop:{
 			if(current < wall){
 				uint32 localSelectionBackground = selectionBackground;
+				uint32 localClientBackground = clientBackground;
+				uint32 localTitleForeground = titleForeground;
+				uint32 localTitleBackground = titleBackground;
 				if(current - *selectedClientListStart == currentSelection){
 					localSelectionBackground = selectedSelectionBackground;
+					localClientBackground = selectedClientBackground;
+					localTitleForeground = selectedTitleForeground;
+					localTitleBackground = selectedTitleBackground;
 				}
 				fillDrawable(pixmap, gc, localSelectionX, localSelectionY, localSelectionWidth, localSelectionHeight, localSelectionBackground);
-				fillDrawable(pixmap, gc, localClientX   , localClientY   , localClientWidth   , localClientHeight   , clientBackground);
-				fillDrawable(pixmap, gc, localTitleX    , localTitleY    , localTitleWidth    , localTitleHeight    , titleBackground);
-				if(font){
-
-
-
-
-
-
-
-
-
-					/*!*/
-
-					/*! create, use and then delete a clip rectangle for the gc. */
-
-					uint16 ucs2[256];
-					uint length = UTF8ToUCS2((*current).titleStart, ucs2, countof(ucs2));
-					xcb_query_text_extents_reply_t *const reply = xcb_wait_for_reply(connection, xcb_query_text_extents_unchecked(connection, font, length, (void *)ucs2), NULL);
+				fillDrawable(pixmap, gc, localClientX   , localClientY   , localClientWidth   , localClientHeight   , localClientBackground);
+				fillDrawable(pixmap, gc, localTitleX    , localTitleY    , localTitleWidth    , localTitleHeight    , localTitleBackground);
+				if(font and (*current).titleStart){
+					xcb_query_text_extents_reply_t *const reply = xcb_wait_for_reply(connection, xcb_query_text_extents_unchecked(connection, font, (*current).titleLength, (void *)(*current).titleStart), NULL);
 					uint32 token = pushPointer(reply, "drawWindow() query text extents reply", iFree);
 					if(reply){
-						uint32 valueList[2];
-						*(valueList + 0) = titleForeground;
-						*(valueList + 1) = titleBackground;
-						/*! {
+						const int fontX = (*reply).overall_left;
+						const int fontY = (*reply).font_ascent;
+						const uint fontWidth = (*reply).overall_width;
+						const uint fontHeight = (*reply).font_ascent + (*reply).font_descent;
+						bool flag = true;
+						int x;
+						int y;
+						switch titleTextHorizontalAlignment over
+							to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ x = fontX; /*-------------------------------------*/ brk;
+							to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ x = fontX + (localTitleWidth - fontWidth) / 2; /*-*/ brk;
+							to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ x = fontX + localTitleWidth - fontWidth; /*-------*/ brk;
+							off: /*----------------------------*/ flag = false; /*----------------------------------*/ brk;
+						end
+						switch titleTextVerticalAlignment over
+							to TOP_VERTICAL_ALIGNMENT: /*----*/ y = fontY; /*---------------------------------------*/ brk;
+							to CENTER_VERTICAL_ALIGNMENT: /*-*/ y = fontY + (localTitleHeight - fontHeight) / 2; /*-*/ brk;
+							to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ y = fontY + localTitleHeight - fontHeight; /*-------*/ brk;
+							off: /*--------------------------*/ flag = false; /*------------------------------------*/ brk;
+						end
+						if(flag){
 							xcb_rectangle_t rectangle;
+							uint32 valueList[2];
 							rectangle.x = localTitleX;
-							rectangle.y = localTitleY + (*reply).font_ascent;
+							rectangle.y = localTitleY;
 							rectangle.width = localTitleWidth;
 							rectangle.height = localTitleHeight;
-							xcb_set_clip_rectangles(connection, XCB_CLIP_ORDERING_UNSORTED, gc, localTitleX, localTitleY + (*reply).font_ascent, 1, &rectangle);
-						} */
-						xcb_change_gc(connection, gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, valueList);
-						xcb_image_text_16(connection, length, pixmap, gc, localTitleX, localTitleY + (*reply).font_ascent, (void *)ucs2);
-						/*! {
-							xcb_set_clip_rectangles(connection, XCB_CLIP_ORDERING_UNSORTED, gc, localTitleX, localTitleY + (*reply).font_ascent, 0, NULL);
-						} */
+							xcb_set_clip_rectangles(connection, XCB_CLIP_ORDERING_UNSORTED, gc, 0, 0, 1, &rectangle);
+							*(valueList + 0) = localTitleForeground;
+							*(valueList + 1) = localTitleBackground;
+							xcb_change_gc(connection, gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, valueList);
+							xcb_image_text_16(connection, (*current).titleLength, pixmap, gc, x + localTitleX, y + localTitleY, (void *)(*current).titleStart);
+							*(valueList + 0) = XCB_NONE;
+							xcb_change_gc(connection, gc, XCB_GC_CLIP_MASK, valueList);
+						}
 						free(reply);
 						popPointer(token);
 					}
-
-					/*!*/
-
-
-
-
-
-
-
-
-
 				}
 
 
@@ -2297,11 +2291,6 @@ RENDERQUERYVERSIONUNCHECKED(){
 
 int main(int argumentAmount, const char *const *argument){
 	(void)setMemory;
-	(void)copyMemory;
-	(void)findStringLength;
-	(void)UTF8ToUCS2;
-	(void)getWindowMonitor;
-	(void)getTimestamp;
 	(void)compositeImages;
 	(void)compositeImagesOver;
 	(void)compositeImagesAnd;
@@ -2954,6 +2943,7 @@ int main(int argumentAmount, const char *const *argument){
 		valueList.colormap = colormap;
 		xcb_create_colormap(connection, XCB_COLORMAP_ALLOC_NONE, colormap, (*screen).root, visual);
 		xcb_create_window(connection, depth, window, (*screen).root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP, &valueList);
+		circlePixmap = XCB_NONE;
 		jmp storeMonitors;
 	}
 	storeMonitors:{
@@ -3088,68 +3078,8 @@ int main(int argumentAmount, const char *const *argument){
 		if(event){
 			jmp eventLoop;
 		}
-		jmp getThings;
-	}
-
-
-
-
-
-
-
-
-
-	/*! where do these get placed? is it standard? if not, make it. */
-
-	getThings:{
-
-
-
-		/*! starting */
-			circleRadius = 0;
-			circlePixmap = XCB_NONE;
-
-
-
-		/*! config */
-			circleRadius = 20;
-
-			/*! use the right color here and update whenever */
-			{
-				Image image;
-				if(createCircle(circleRadius, 0xFF171717, &image)){
-					if(circlePixmap){
-						xcb_free_pixmap(connection, circlePixmap);
-					}
-					circlePixmap = xcb_generate_id(connection);
-					xcb_create_pixmap(connection, depth, circlePixmap, window, image.width, image.height);
-					xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, circlePixmap, gc, image.width, image.height, 0, 0, 0, depth, image.size, image.data);
-					free(image.data);
-					popPointer(image.dataToken);
-				}
-			}
-
-
-
-
-
-
-
-
-
-		createClientList(&clientListSize, &clientListStart, &clientListToken, atom._NET_CLIENT_LIST);
-		createClientList(&clientListStackingSize, &clientListStackingStart, &clientListStackingToken, atom._NET_CLIENT_LIST_STACKING);
 		jmp preReadConfig;
 	}
-
-
-
-
-
-
-
-
-
 	preReadConfig:{
 		bulkInsertString(&globalScopesInstructionRoot, globalScopesInstructionList);
 		bulkInsertString(&globalInstructionRoot, globalInstructionList);
@@ -4488,13 +4418,19 @@ SETCONFIGVARIABLES(){
 	font = XCB_NONE;
 	windowBackground = 0x00000000;
 	selectionBackground = 0x00000000;
-	selectedSelectionBackground = 0x00000000;
 	clientBackground = 0x00000000;
 	titleForeground = 0x00000000;
 	titleBackground = 0x00000000;
+	selectedSelectionBackground = 0x00000000;
+	selectedClientBackground = 0x00000000;
+	selectedTitleForeground = 0x00000000;
+	selectedTitleBackground = 0x00000000;
 	titleTextCutoff = 0;
+	titleTextHorizontalAlignment = NONE_HORIZONTAL_ALIGNMENT;
+	titleTextVerticalAlignment = NONE_VERTICAL_ALIGNMENT;
 	selectedClient = NONE_SELECTED_CLIENT;
 	selectionAction = NONE_SELECTION_ACTION;
+	windowCircleRadius = 0;
 	ret;
 }
 READCONFIG(){
@@ -5424,47 +5360,53 @@ READCONFIG(){
 		}
 		if(instructionStart == setInstruction){
 			switch name0Return over
-				to WINDOW_X_VARIABLE: /*----------------------*/ applySubinstruction(windowX, Set); /*---------------------*/ jmp assessSubinstruction;
-				to WINDOW_Y_VARIABLE: /*----------------------*/ applySubinstruction(windowY, Set); /*---------------------*/ jmp assessSubinstruction;
-				to WINDOW_X_OFFSET_VARIABLE: /*---------------*/ applySubinstruction(windowXOffset, Set); /*---------------*/ jmp assessSubinstruction;
-				to WINDOW_Y_OFFSET_VARIABLE: /*---------------*/ applySubinstruction(windowYOffset, Set); /*---------------*/ jmp assessSubinstruction;
-				to WINDOW_HORIZONTAL_ALIGNMENT_VARIABLE: /*---*/ applySubinstruction(windowHorizontalAlignment, Set); /*---*/ jmp assessSubinstruction;
-				to WINDOW_VERTICAL_ALIGNMENT_VARIABLE: /*-----*/ applySubinstruction(windowVerticalAlignment, Set); /*-----*/ jmp assessSubinstruction;
-				to WINDOW_WIDTH_VARIABLE: /*------------------*/ applySubinstruction(windowWidth, Set); /*-----------------*/ jmp assessSubinstruction;
-				to WINDOW_HEIGHT_VARIABLE: /*-----------------*/ applySubinstruction(windowHeight, Set); /*----------------*/ jmp assessSubinstruction;
-				to SELECTION_MARGIN_VARIABLE: /*--------------*/ applySubinstruction(selectionMargin, Set); /*-------------*/ jmp assessSubinstruction;
-				to SELECTION_PADDING_VARIABLE: /*-------------*/ applySubinstruction(selectionPadding, Set); /*------------*/ jmp assessSubinstruction;
-				to SELECTION_GAP_VARIABLE: /*-----------------*/ applySubinstruction(selectionGap, Set); /*----------------*/ jmp assessSubinstruction;
-				to CLIENT_X_VARIABLE: /*----------------------*/ applySubinstruction(clientX, Set); /*---------------------*/ jmp assessSubinstruction;
-				to CLIENT_Y_VARIABLE: /*----------------------*/ applySubinstruction(clientY, Set); /*---------------------*/ jmp assessSubinstruction;
-				to CLIENT_X_OFFSET_VARIABLE: /*---------------*/ applySubinstruction(clientXOffset, Set); /*---------------*/ jmp assessSubinstruction;
-				to CLIENT_Y_OFFSET_VARIABLE: /*---------------*/ applySubinstruction(clientYOffset, Set); /*---------------*/ jmp assessSubinstruction;
-				to CLIENT_HORIZONTAL_ALIGNMENT_VARIABLE: /*---*/ applySubinstruction(clientHorizontalAlignment, Set); /*---*/ jmp assessSubinstruction;
-				to CLIENT_VERTICAL_ALIGNMENT_VARIABLE: /*-----*/ applySubinstruction(clientVerticalAlignment, Set); /*-----*/ jmp assessSubinstruction;
-				to CLIENT_WIDTH_VARIABLE: /*------------------*/ applySubinstruction(clientWidth, Set); /*-----------------*/ jmp assessSubinstruction;
-				to CLIENT_HEIGHT_VARIABLE: /*-----------------*/ applySubinstruction(clientHeight, Set); /*----------------*/ jmp assessSubinstruction;
-				to TITLE_X_VARIABLE: /*-----------------------*/ applySubinstruction(titleX, Set); /*----------------------*/ jmp assessSubinstruction;
-				to TITLE_Y_VARIABLE: /*-----------------------*/ applySubinstruction(titleY, Set); /*----------------------*/ jmp assessSubinstruction;
-				to TITLE_X_OFFSET_VARIABLE: /*----------------*/ applySubinstruction(titleXOffset, Set); /*----------------*/ jmp assessSubinstruction;
-				to TITLE_Y_OFFSET_VARIABLE: /*----------------*/ applySubinstruction(titleYOffset, Set); /*----------------*/ jmp assessSubinstruction;
-				to TITLE_HORIZONTAL_ALIGNMENT_VARIABLE: /*----*/ applySubinstruction(titleHorizontalAlignment, Set); /*----*/ jmp assessSubinstruction;
-				to TITLE_VERTICAL_ALIGNMENT_VARIABLE: /*------*/ applySubinstruction(titleVerticalAlignment, Set); /*------*/ jmp assessSubinstruction;
-				to TITLE_WIDTH_VARIABLE: /*-------------------*/ applySubinstruction(titleWidth, Set); /*------------------*/ jmp assessSubinstruction;
-				to TITLE_HEIGHT_VARIABLE: /*------------------*/ applySubinstruction(titleHeight, Set); /*-----------------*/ jmp assessSubinstruction;
-				to WHICH_MONITOR_VARIABLE: /*-----------------*/ applySubinstruction(whichMonitor, Set); /*----------------*/ jmp assessSubinstruction;
-				to CLIENT_ORDER_VARIABLE: /*------------------*/ applySubinstruction(clientOrder, Set); /*-----------------*/ jmp assessSubinstruction;
-				to ALLOW_CIRCULAR_NAVIGATION_VARIABLE: /*-----*/ applySubinstruction(allowCircularNavigation, Set); /*-----*/ jmp assessSubinstruction;
-				to FONT_VARIABLE: /*--------------------------*/ applySubinstruction(font, Set); /*------------------------*/ jmp assessSubinstruction;
-				to WINDOW_BACKGROUND_VARIABLE: /*-------------*/ applySubinstruction(windowBackground, Set); /*------------*/ jmp assessSubinstruction;
-				to SELECTION_BACKGROUND_VARIABLE: /*----------*/ applySubinstruction(selectionBackground, Set); /*---------*/ jmp assessSubinstruction;
-				to SELECTED_SELECTION_BACKGROUND_VARIABLE: /*-*/ applySubinstruction(selectedSelectionBackground, Set); /*-*/ jmp assessSubinstruction;
-				to CLIENT_BACKGROUND_VARIABLE: /*-------------*/ applySubinstruction(clientBackground, Set); /*------------*/ jmp assessSubinstruction;
-				to TITLE_FOREGROUND_VARIABLE: /*--------------*/ applySubinstruction(titleForeground, Set); /*-------------*/ jmp assessSubinstruction;
-				to TITLE_BACKGROUND_VARIABLE: /*--------------*/ applySubinstruction(titleBackground, Set); /*-------------*/ jmp assessSubinstruction;
-				to TITLE_TEXT_CUTOFF_VARIABLE: /*-------------*/ applySubinstruction(titleTextCutoff, Set); /*-------------*/ jmp assessSubinstruction;
-				to SELECTED_CLIENT_VARIABLE: /*---------------*/ applySubinstruction(selectedClient, Set); /*--------------*/ jmp assessSubinstruction;
-				to SELECTION_ACTION_VARIABLE: /*--------------*/ applySubinstruction(selectionAction, Set); /*-------------*/ jmp assessSubinstruction;
-				off: /*---------------------------------------*/ /*--------------------------------------------------------*/ brk;
+				to WINDOW_X_VARIABLE: /*------------------------*/ applySubinstruction(windowX, Set); /*----------------------*/ jmp assessSubinstruction;
+				to WINDOW_Y_VARIABLE: /*------------------------*/ applySubinstruction(windowY, Set); /*----------------------*/ jmp assessSubinstruction;
+				to WINDOW_X_OFFSET_VARIABLE: /*-----------------*/ applySubinstruction(windowXOffset, Set); /*----------------*/ jmp assessSubinstruction;
+				to WINDOW_Y_OFFSET_VARIABLE: /*-----------------*/ applySubinstruction(windowYOffset, Set); /*----------------*/ jmp assessSubinstruction;
+				to WINDOW_HORIZONTAL_ALIGNMENT_VARIABLE: /*-----*/ applySubinstruction(windowHorizontalAlignment, Set); /*----*/ jmp assessSubinstruction;
+				to WINDOW_VERTICAL_ALIGNMENT_VARIABLE: /*-------*/ applySubinstruction(windowVerticalAlignment, Set); /*------*/ jmp assessSubinstruction;
+				to WINDOW_WIDTH_VARIABLE: /*--------------------*/ applySubinstruction(windowWidth, Set); /*------------------*/ jmp assessSubinstruction;
+				to WINDOW_HEIGHT_VARIABLE: /*-------------------*/ applySubinstruction(windowHeight, Set); /*-----------------*/ jmp assessSubinstruction;
+				to SELECTION_MARGIN_VARIABLE: /*----------------*/ applySubinstruction(selectionMargin, Set); /*--------------*/ jmp assessSubinstruction;
+				to SELECTION_PADDING_VARIABLE: /*---------------*/ applySubinstruction(selectionPadding, Set); /*-------------*/ jmp assessSubinstruction;
+				to SELECTION_GAP_VARIABLE: /*-------------------*/ applySubinstruction(selectionGap, Set); /*-----------------*/ jmp assessSubinstruction;
+				to CLIENT_X_VARIABLE: /*------------------------*/ applySubinstruction(clientX, Set); /*----------------------*/ jmp assessSubinstruction;
+				to CLIENT_Y_VARIABLE: /*------------------------*/ applySubinstruction(clientY, Set); /*----------------------*/ jmp assessSubinstruction;
+				to CLIENT_X_OFFSET_VARIABLE: /*-----------------*/ applySubinstruction(clientXOffset, Set); /*----------------*/ jmp assessSubinstruction;
+				to CLIENT_Y_OFFSET_VARIABLE: /*-----------------*/ applySubinstruction(clientYOffset, Set); /*----------------*/ jmp assessSubinstruction;
+				to CLIENT_HORIZONTAL_ALIGNMENT_VARIABLE: /*-----*/ applySubinstruction(clientHorizontalAlignment, Set); /*----*/ jmp assessSubinstruction;
+				to CLIENT_VERTICAL_ALIGNMENT_VARIABLE: /*-------*/ applySubinstruction(clientVerticalAlignment, Set); /*------*/ jmp assessSubinstruction;
+				to CLIENT_WIDTH_VARIABLE: /*--------------------*/ applySubinstruction(clientWidth, Set); /*------------------*/ jmp assessSubinstruction;
+				to CLIENT_HEIGHT_VARIABLE: /*-------------------*/ applySubinstruction(clientHeight, Set); /*-----------------*/ jmp assessSubinstruction;
+				to TITLE_X_VARIABLE: /*-------------------------*/ applySubinstruction(titleX, Set); /*-----------------------*/ jmp assessSubinstruction;
+				to TITLE_Y_VARIABLE: /*-------------------------*/ applySubinstruction(titleY, Set); /*-----------------------*/ jmp assessSubinstruction;
+				to TITLE_X_OFFSET_VARIABLE: /*------------------*/ applySubinstruction(titleXOffset, Set); /*-----------------*/ jmp assessSubinstruction;
+				to TITLE_Y_OFFSET_VARIABLE: /*------------------*/ applySubinstruction(titleYOffset, Set); /*-----------------*/ jmp assessSubinstruction;
+				to TITLE_HORIZONTAL_ALIGNMENT_VARIABLE: /*------*/ applySubinstruction(titleHorizontalAlignment, Set); /*-----*/ jmp assessSubinstruction;
+				to TITLE_VERTICAL_ALIGNMENT_VARIABLE: /*--------*/ applySubinstruction(titleVerticalAlignment, Set); /*-------*/ jmp assessSubinstruction;
+				to TITLE_WIDTH_VARIABLE: /*---------------------*/ applySubinstruction(titleWidth, Set); /*-------------------*/ jmp assessSubinstruction;
+				to TITLE_HEIGHT_VARIABLE: /*--------------------*/ applySubinstruction(titleHeight, Set); /*------------------*/ jmp assessSubinstruction;
+				to WHICH_MONITOR_VARIABLE: /*-------------------*/ applySubinstruction(whichMonitor, Set); /*-----------------*/ jmp assessSubinstruction;
+				to CLIENT_ORDER_VARIABLE: /*--------------------*/ applySubinstruction(clientOrder, Set); /*------------------*/ jmp assessSubinstruction;
+				to ALLOW_CIRCULAR_NAVIGATION_VARIABLE: /*-------*/ applySubinstruction(allowCircularNavigation, Set); /*------*/ jmp assessSubinstruction;
+				to FONT_VARIABLE: /*----------------------------*/ applySubinstruction(font, Set); /*-------------------------*/ jmp assessSubinstruction;
+				to WINDOW_BACKGROUND_VARIABLE: /*---------------*/ applySubinstruction(windowBackground, Set); /*-------------*/ jmp assessSubinstruction;
+				to SELECTION_BACKGROUND_VARIABLE: /*------------*/ applySubinstruction(selectionBackground, Set); /*----------*/ jmp assessSubinstruction;
+				to CLIENT_BACKGROUND_VARIABLE: /*---------------*/ applySubinstruction(clientBackground, Set); /*-------------*/ jmp assessSubinstruction;
+				to TITLE_FOREGROUND_VARIABLE: /*----------------*/ applySubinstruction(titleForeground, Set); /*--------------*/ jmp assessSubinstruction;
+				to TITLE_BACKGROUND_VARIABLE: /*----------------*/ applySubinstruction(titleBackground, Set); /*--------------*/ jmp assessSubinstruction;
+				to SELECTED_SELECTION_BACKGROUND_VARIABLE: /*---*/ applySubinstruction(selectedSelectionBackground, Set); /*--*/ jmp assessSubinstruction;
+				to SELECTED_CLIENT_BACKGROUND_VARIABLE: /*------*/ applySubinstruction(selectedClientBackground, Set); /*-----*/ jmp assessSubinstruction;
+				to SELECTED_TITLE_FOREGROUND_VARIABLE: /*-------*/ applySubinstruction(selectedTitleForeground, Set); /*------*/ jmp assessSubinstruction;
+				to SELECTED_TITLE_BACKGROUND_VARIABLE: /*-------*/ applySubinstruction(selectedTitleBackground, Set); /*------*/ jmp assessSubinstruction;
+				to TITLE_TEXT_CUTOFF_VARIABLE: /*---------------*/ applySubinstruction(titleTextCutoff, Set); /*--------------*/ jmp assessSubinstruction;
+				to TITLE_TEXT_HORIZONTAL_ALIGNMENT_VARIABLE: /*-*/ applySubinstruction(titleTextHorizontalAlignment, Set); /*-*/ jmp assessSubinstruction;
+				to TITLE_TEXT_VERTICAL_ALIGNMENT_VARIABLE: /*---*/ applySubinstruction(titleTextVerticalAlignment, Set); /*---*/ jmp assessSubinstruction;
+				to SELECTED_CLIENT_VARIABLE: /*-----------------*/ applySubinstruction(selectedClient, Set); /*---------------*/ jmp assessSubinstruction;
+				to SELECTION_ACTION_VARIABLE: /*----------------*/ applySubinstruction(selectionAction, Set); /*--------------*/ jmp assessSubinstruction;
+				to WINDOW_CIRCLE_RADIUS_VARIABLE: /*------------*/ applySubinstruction(windowCircleRadius, Set); /*-----------*/ jmp assessSubinstruction;
+				off: /*-----------------------------------------*/ /*---------------------------------------------------------*/ brk;
 			end
 		}
 		if(instructionStart == grabKeycodeInstruction){
@@ -5609,10 +5551,8 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [1, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
-					if(name1Return){
-						windowWidth = integer0Return;
-						windowWidthType = name1Return;
-					}
+					windowWidth = integer0Return;
+					windowWidthType = name1Return;
 					jmp getStatementStart;
 				}
 				to WINDOW_HEIGHT_VARIABLE:{
@@ -5620,10 +5560,8 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [1, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
-					if(name1Return){
-						windowHeight = integer0Return;
-						windowHeightType = name1Return;
-					}
+					windowHeight = integer0Return;
+					windowHeightType = name1Return;
 					jmp getStatementStart;
 				}
 				to SELECTION_MARGIN_VARIABLE:{
@@ -5667,10 +5605,8 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [1, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
-					if(name1Return){
-						clientWidth = integer0Return;
-						clientWidthType = name1Return;
-					}
+					clientWidth = integer0Return;
+					clientWidthType = name1Return;
 					jmp getStatementStart;
 				}
 				to CLIENT_HEIGHT_VARIABLE:{
@@ -5678,10 +5614,8 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [1, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
-					if(name1Return){
-						clientHeight = integer0Return;
-						clientHeightType = name1Return;
-					}
+					clientHeight = integer0Return;
+					clientHeightType = name1Return;
 					jmp getStatementStart;
 				}
 				to TITLE_X_VARIABLE:{
@@ -5713,10 +5647,8 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [1, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
-					if(name1Return){
-						titleWidth = integer0Return;
-						titleWidthType = name1Return;
-					}
+					titleWidth = integer0Return;
+					titleWidthType = name1Return;
 					jmp getStatementStart;
 				}
 				to TITLE_HEIGHT_VARIABLE:{
@@ -5724,10 +5656,8 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [1, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
-					if(name1Return){
-						titleHeight = integer0Return;
-						titleHeightType = name1Return;
-					}
+					titleHeight = integer0Return;
+					titleHeightType = name1Return;
 					jmp getStatementStart;
 				}
 				to WHICH_MONITOR_VARIABLE:{
@@ -5772,10 +5702,6 @@ READCONFIG(){
 					selectionBackground = integer0Return;
 					jmp getStatementStart;
 				}
-				to SELECTED_SELECTION_BACKGROUND_VARIABLE:{
-					selectedSelectionBackground = integer0Return;
-					jmp getStatementStart;
-				}
 				to CLIENT_BACKGROUND_VARIABLE:{
 					clientBackground = integer0Return;
 					jmp getStatementStart;
@@ -5788,8 +5714,36 @@ READCONFIG(){
 					titleBackground = integer0Return;
 					jmp getStatementStart;
 				}
+				to SELECTED_SELECTION_BACKGROUND_VARIABLE:{
+					selectedSelectionBackground = integer0Return;
+					jmp getStatementStart;
+				}
+				to SELECTED_CLIENT_BACKGROUND_VARIABLE:{
+					selectedClientBackground = integer0Return;
+					jmp getStatementStart;
+				}
+				to SELECTED_TITLE_FOREGROUND_VARIABLE:{
+					selectedTitleForeground = integer0Return;
+					jmp getStatementStart;
+				}
+				to SELECTED_TITLE_BACKGROUND_VARIABLE:{
+					selectedTitleBackground = integer0Return;
+					jmp getStatementStart;
+				}
 				to TITLE_TEXT_CUTOFF_VARIABLE:{
+					if(integer0Return < 0){
+						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
+						jmp getStatementStart;
+					}
 					titleTextCutoff = integer0Return;
+					jmp getStatementStart;
+				}
+				to TITLE_TEXT_HORIZONTAL_ALIGNMENT_VARIABLE:{
+					titleTextHorizontalAlignment = name1Return;
+					jmp getStatementStart;
+				}
+				to TITLE_TEXT_VERTICAL_ALIGNMENT_VARIABLE:{
+					titleTextVerticalAlignment = name1Return;
 					jmp getStatementStart;
 				}
 				to SELECTED_CLIENT_VARIABLE:{
@@ -5798,6 +5752,33 @@ READCONFIG(){
 				}
 				to SELECTION_ACTION_VARIABLE:{
 					selectionAction = name1Return;
+					jmp getStatementStart;
+				}
+				to WINDOW_CIRCLE_RADIUS_VARIABLE:{
+					Image image;
+					if(integer0Return < 0){
+						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
+						jmp getStatementStart;
+					}
+
+
+
+					/*! use the right color here and update whenever */
+
+					if(integer0Return and createCircle(integer0Return, 0xFF171717, &image)){
+
+
+
+						if(circlePixmap){
+							xcb_free_pixmap(connection, circlePixmap);
+						}
+						circlePixmap = xcb_generate_id(connection);
+						xcb_create_pixmap(connection, depth, circlePixmap, window, image.width, image.height);
+						xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, circlePixmap, gc, image.width, image.height, 0, 0, 0, depth, image.size, image.data);
+						free(image.data);
+						popPointer(image.dataToken);
+						windowCircleRadius = integer0Return;
+					}
 					jmp getStatementStart;
 				}
 				off:{
@@ -6061,28 +6042,28 @@ READCONFIG(){
 		jmp postReadConfig;
 	}
 	postReadConfig:{
+		ElementRectangle rectangle;
+		createClientList(&clientListSize, &clientListStart, &clientListToken, atom._NET_CLIENT_LIST);
+		createClientList(&clientListStackingSize, &clientListStackingStart, &clientListStackingToken, atom._NET_CLIENT_LIST_STACKING);
 		switch clientOrder over
 			to CREATION_CLIENT_ORDER: /*-*/ selectedClientListSize = &clientListSize; /*---------*/ selectedClientListStart = &clientListStart; /*---------*/ brk;
 			to STACKING_CLIENT_ORDER: /*-*/ selectedClientListSize = &clientListStackingSize; /*-*/ selectedClientListStart = &clientListStackingStart; /*-*/ brk;
 			off: /*----------------------*/ selectedClientListSize = NULL; /*--------------------*/ selectedClientListStart = NULL; /*---------------------*/ brk;
 		end
-		if(mapped){
-			ElementRectangle rectangle;
-			if(getWindowRectangle(&rectangle) and rectangle.width and rectangle.height){
-				struct{
-					int32 /*--*/ x;
-					int32 /*--*/ y;
-					uint32 /*-*/ width;
-					uint32 /*-*/ height;
-				} valueList;
-				valueList.x = rectangle.x;
-				valueList.y = rectangle.y;
-				valueList.width = rectangle.width;
-				valueList.height = rectangle.height;
-				xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, &valueList);
-				setWindowProperties(valueList.x, valueList.y, valueList.width, valueList.height);
-				drawWindow(&rectangle);
-			}
+		if(mapped and getWindowRectangle(&rectangle) and rectangle.width and rectangle.height){
+			struct{
+				int32 /*--*/ x;
+				int32 /*--*/ y;
+				uint32 /*-*/ width;
+				uint32 /*-*/ height;
+			} valueList;
+			valueList.x = rectangle.x;
+			valueList.y = rectangle.y;
+			valueList.width = rectangle.width;
+			valueList.height = rectangle.height;
+			xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, &valueList);
+			setWindowProperties(valueList.x, valueList.y, valueList.width, valueList.height);
+			drawWindow(&rectangle);
 		}
 		xcb_flush(connection);
 		ret;
