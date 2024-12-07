@@ -353,6 +353,14 @@ SOFTWARE. */
 	#define NORMAL_STATE /*-----------------------------*/ (1)
 	#define ICON_STATE /*-------------------------------*/ (3)
 
+	#define NONE_SELECT_SELECTION /*--------------------*/ (0)
+	#define PREVIOUS_SELECT_SELECTION /*----------------*/ (1)
+	#define NEXT_SELECT_SELECTION /*--------------------*/ (2)
+	#define LEFT_SELECT_SELECTION /*--------------------*/ (3)
+	#define RIGHT_SELECT_SELECTION /*-------------------*/ (4)
+	#define ABOVE_SELECT_SELECTION /*-------------------*/ (5)
+	#define BELOW_SELECT_SELECTION /*-------------------*/ (6)
+
 	#define QUIT() /*-----------------------------------*/ local void               quit(int signal)
 	#define INITMEMORYMANAGER() /*----------------------*/ local bool               initMemoryManager(void)
 	#define PUSHPOINTER() /*----------------------------*/ local uint32            _pushPointer(void *const pointer, const char *const label, int (*const freeFunction)(void *))
@@ -416,17 +424,8 @@ SOFTWARE. */
 	#define GETWINDOWELEMENTRECTANGLE() /*--------------*/ local void               getWindowElementRectangle(const ElementRectangle *const windowRectangle, const int elementX, const int elementY, const int elementXOffset, const int elementYOffset, const uint8 elementHorizontalAlignment, const uint8 elementVerticalAlignment, const int elementWidth, const int elementHeight, const uint8 elementWidthType, const uint8 elementHeightType, ElementRectangle *const rectangle)
 	#define FINDCLIENTLISTWINDOW() /*-------------------*/ local Client *           findClientListWindow(const xcb_window_t window)
 	#define FINDCLIENTLISTSTACKINGWINDOW() /*-----------*/ local Client *           findClientListStackingWindow(const xcb_window_t window)
-	#define SELECTLEFTSELECTION() /*--------------------*/ local void               selectLeftSelection(void)
-	#define SELECTRIGHTSELECTION() /*-------------------*/ local void               selectRightSelection(void)
-	#define SELECTABOVESELECTION() /*-------------------*/ local void               selectAboveSelection(void)
-	#define SELECTBELOWSELECTION() /*-------------------*/ local void               selectBelowSelection(void)
 	#define SHOWWINDOWCOMMAND() /*----------------------*/ local void               showWindowCommand(void)
-	#define SELECTPREVIOUSSELECTIONCOMMAND() /*---------*/ local void               selectPreviousSelectionCommand(void)
-	#define SELECTNEXTSELECTIONCOMMAND() /*-------------*/ local void               selectNextSelectionCommand(void)
-	#define SELECTLEFTSELECTIONCOMMAND() /*-------------*/ local void               selectLeftSelectionCommand(void)
-	#define SELECTRIGHTSELECTIONCOMMAND() /*------------*/ local void               selectRightSelectionCommand(void)
-	#define SELECTABOVESELECTIONCOMMAND() /*------------*/ local void               selectAboveSelectionCommand(void)
-	#define SELECTBELOWSELECTIONCOMMAND() /*------------*/ local void               selectBelowSelectionCommand(void)
+	#define SELECTSELECTIONCOMMAND() /*-----------------*/ local void               selectSelectionCommand(const uint8 selection)
 	#define RESTARTCOMMAND() /*-------------------------*/ local void               restartCommand(void)
 	#define EXITCOMMAND() /*----------------------------*/ local void               exitCommand(void)
 	#define HIDEWINDOWCOMMAND() /*----------------------*/ local void               hideWindowCommand(void)
@@ -1311,17 +1310,8 @@ SOFTWARE. */
 	GETWINDOWELEMENTRECTANGLE();
 	FINDCLIENTLISTWINDOW();
 	FINDCLIENTLISTSTACKINGWINDOW();
-	SELECTLEFTSELECTION();
-	SELECTRIGHTSELECTION();
-	SELECTABOVESELECTION();
-	SELECTBELOWSELECTION();
 	SHOWWINDOWCOMMAND();
-	SELECTPREVIOUSSELECTIONCOMMAND();
-	SELECTNEXTSELECTIONCOMMAND();
-	SELECTLEFTSELECTIONCOMMAND();
-	SELECTRIGHTSELECTIONCOMMAND();
-	SELECTABOVESELECTIONCOMMAND();
-	SELECTBELOWSELECTIONCOMMAND();
+	SELECTSELECTIONCOMMAND();
 	RESTARTCOMMAND();
 	EXITCOMMAND();
 	HIDEWINDOWCOMMAND();
@@ -2535,7 +2525,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectPreviousSelectionCommand();
+		selectSelectionCommand(PREVIOUS_SELECT_SELECTION);
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -2545,7 +2535,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectNextSelectionCommand();
+		selectSelectionCommand(NEXT_SELECT_SELECTION);
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -2555,7 +2545,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectLeftSelectionCommand();
+		selectSelectionCommand(LEFT_SELECT_SELECTION);
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -2565,7 +2555,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectRightSelectionCommand();
+		selectSelectionCommand(RIGHT_SELECT_SELECTION);
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -2575,7 +2565,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectAboveSelectionCommand();
+		selectSelectionCommand(ABOVE_SELECT_SELECTION);
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -2585,7 +2575,7 @@ int main(int argumentAmount, const char *const *argument){
 		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
-		selectBelowSelectionCommand();
+		selectSelectionCommand(BELOW_SELECT_SELECTION);
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -4578,27 +4568,27 @@ READCONFIG(){
 					jmp getStatementStart;
 				}
 				to SELECT_PREVIOUS_COMMAND:{
-					selectPreviousSelectionCommand();
+					selectSelectionCommand(PREVIOUS_SELECT_SELECTION);
 					jmp getStatementStart;
 				}
 				to SELECT_NEXT_COMMAND:{
-					selectNextSelectionCommand();
+					selectSelectionCommand(NEXT_SELECT_SELECTION);
 					jmp getStatementStart;
 				}
 				to SELECT_LEFT_COMMAND:{
-					selectLeftSelectionCommand();
+					selectSelectionCommand(LEFT_SELECT_SELECTION);
 					jmp getStatementStart;
 				}
 				to SELECT_RIGHT_COMMAND:{
-					selectRightSelectionCommand();
+					selectSelectionCommand(RIGHT_SELECT_SELECTION);
 					jmp getStatementStart;
 				}
 				to SELECT_ABOVE_COMMAND:{
-					selectAboveSelectionCommand();
+					selectSelectionCommand(ABOVE_SELECT_SELECTION);
 					jmp getStatementStart;
 				}
 				to SELECT_BELOW_COMMAND:{
-					selectBelowSelectionCommand();
+					selectSelectionCommand(BELOW_SELECT_SELECTION);
 					jmp getStatementStart;
 				}
 				to RESTART_COMMAND:{
@@ -7332,115 +7322,6 @@ FINDCLIENTLISTSTACKINGWINDOW(){
 	}
 	ret NULL;
 }
-SELECTLEFTSELECTION(){
-	if(currentSelection == -1){
-		const uint height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
-		currentSelection = height / 2 * selectionFitAmount + selectionFitAmount - 1;
-		if(currentSelection > (int)*selectedClientListSize - 1){
-			currentSelection = *selectedClientListSize - 1;
-		}
-		jmp updateWindow;
-	}
-	if(!(currentSelection % selectionFitAmount)){
-		if(!allowCircularNavigation){
-			ret;
-		}
-		currentSelection += selectionFitAmount - 1;
-		if(currentSelection > (int)*selectedClientListSize - 1){
-			currentSelection = *selectedClientListSize - 1;
-		}
-		jmp updateWindow;
-	}
-	dec currentSelection;
-	jmp updateWindow;
-	updateWindow:{
-		if(mapped){
-			drawWindow(NULL);
-		}
-		ret;
-	}
-}
-SELECTRIGHTSELECTION(){
-	if(currentSelection == -1){
-		const uint height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
-		currentSelection = height / 2 * selectionFitAmount;
-		jmp updateWindow;
-	}
-	if(currentSelection == (int)*selectedClientListSize - 1 or !((currentSelection + 1) % selectionFitAmount)){
-		if(!allowCircularNavigation){
-			ret;
-		}
-		currentSelection -= currentSelection % selectionFitAmount;
-		jmp updateWindow;
-	}
-	inc currentSelection;
-	jmp updateWindow;
-	updateWindow:{
-		if(mapped){
-			drawWindow(NULL);
-		}
-		ret;
-	}
-}
-SELECTABOVESELECTION(){
-	if(currentSelection == -1){
-		const uint height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
-		currentSelection = (height - 1) * selectionFitAmount + selectionFitAmount / 2;
-		if(currentSelection > (int)*selectedClientListSize - 1){
-			currentSelection = *selectedClientListSize - 1;
-		}
-		jmp updateWindow;
-	}
-	if(currentSelection < (int)selectionFitAmount){
-		uint height;
-		if(!allowCircularNavigation){
-			ret;
-		}
-		height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
-		currentSelection += (height - 1) * selectionFitAmount;
-		if(currentSelection > (int)*selectedClientListSize - 1){
-			currentSelection -= selectionFitAmount;
-		}
-		jmp updateWindow;
-	}
-	currentSelection -= selectionFitAmount;
-	jmp updateWindow;
-	updateWindow:{
-		if(mapped){
-			drawWindow(NULL);
-		}
-		ret;
-	}
-}
-SELECTBELOWSELECTION(){
-	if(currentSelection == -1){
-		currentSelection = selectionFitAmount / 2;
-		if(currentSelection > (int)*selectedClientListSize - 1){
-			currentSelection = *selectedClientListSize - 1;
-		}
-		jmp updateWindow;
-	}
-	if(currentSelection > (int)(*selectedClientListSize - selectionFitAmount - 1)){
-		uint height;
-		if(!allowCircularNavigation){
-			ret;
-		}
-		height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
-		currentSelection -= (height - 1) * selectionFitAmount;
-		if(currentSelection < 0){
-			currentSelection += selectionFitAmount;
-		}
-		jmp updateWindow;
-	}
-	currentSelection += selectionFitAmount;
-	jmp updateWindow;
-	updateWindow:{
-		if(mapped){
-			drawWindow(NULL);
-		}
-		ret;
-	}
-}
 SHOWWINDOWCOMMAND(){
 	ElementRectangle rectangle;
 	if(!mapped and getWindowRectangle(&rectangle) and rectangle.width and rectangle.height){
@@ -7497,85 +7378,162 @@ SHOWWINDOWCOMMAND(){
 	}
 	ret;
 }
-SELECTPREVIOUSSELECTIONCOMMAND(){
+SELECTSELECTIONCOMMAND(){
 	if(!clientOrder or !selectionFitAmount or !*selectedClientListSize){
 		ret;
 	}
-	if(currentSelection > 0){
+	switch selection over
+		to PREVIOUS_SELECT_SELECTION:{
+			jmp selectPrevious;
+		}
+		to NEXT_SELECT_SELECTION:{
+			jmp selectNext;
+		}
+		to LEFT_SELECT_SELECTION:{
+			switch selectionAxis over
+				to HORIZONTAL_AXIS: /*-*/ jmp selectLeft;
+				to VERTICAL_AXIS: /*---*/ jmp selectAbove;
+				off: /*----------------*/ ret;
+			end
+		}
+		to RIGHT_SELECT_SELECTION:{
+			switch selectionAxis over
+				to HORIZONTAL_AXIS: /*-*/ jmp selectRight;
+				to VERTICAL_AXIS: /*---*/ jmp selectBelow;
+				off: /*----------------*/ ret;
+			end
+		}
+		to ABOVE_SELECT_SELECTION:{
+			switch selectionAxis over
+				to HORIZONTAL_AXIS: /*-*/ jmp selectAbove;
+				to VERTICAL_AXIS: /*---*/ jmp selectLeft;
+				off: /*----------------*/ ret;
+			end
+		}
+		to BELOW_SELECT_SELECTION:{
+			switch selectionAxis over
+				to HORIZONTAL_AXIS: /*-*/ jmp selectBelow;
+				to VERTICAL_AXIS: /*---*/ jmp selectRight;
+				off: /*----------------*/ ret;
+			end
+		}
+		off:{
+			ret;
+		}
+	end
+	selectPrevious:{
+		if(currentSelection > 0){
+			dec currentSelection;
+			jmp updateWindow;
+		}
+		if(currentSelection == -1 or allowCircularNavigation){
+			currentSelection = *selectedClientListSize - 1;
+			jmp updateWindow;
+		}
+		ret;
+	}
+	selectNext:{
+		if(currentSelection < (int)*selectedClientListSize - 1){
+			inc currentSelection;
+			jmp updateWindow;
+		}
+		if(currentSelection == -1 or allowCircularNavigation){
+			currentSelection = 0;
+			jmp updateWindow;
+		}
+		ret;
+	}
+	selectLeft:{
+		if(currentSelection == -1){
+			const uint height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
+			currentSelection = height / 2 * selectionFitAmount + selectionFitAmount - 1;
+			if(currentSelection > (int)*selectedClientListSize - 1){
+				currentSelection = *selectedClientListSize - 1;
+			}
+			jmp updateWindow;
+		}
+		if(!(currentSelection % selectionFitAmount)){
+			if(!allowCircularNavigation){
+				ret;
+			}
+			currentSelection += selectionFitAmount - 1;
+			if(currentSelection > (int)*selectedClientListSize - 1){
+				currentSelection = *selectedClientListSize - 1;
+			}
+			jmp updateWindow;
+		}
 		dec currentSelection;
 		jmp updateWindow;
 	}
-	if(currentSelection == -1 or allowCircularNavigation){
-		currentSelection = *selectedClientListSize - 1;
-		jmp updateWindow;
-	}
-	ret;
-	updateWindow:{
-		if(mapped){
-			drawWindow(NULL);
+	selectRight:{
+		if(currentSelection == -1){
+			const uint height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
+			currentSelection = height / 2 * selectionFitAmount;
+			jmp updateWindow;
 		}
-		ret;
-	}
-}
-SELECTNEXTSELECTIONCOMMAND(){
-	if(!clientOrder or !selectionFitAmount or !*selectedClientListSize){
-		ret;
-	}
-	if(currentSelection < (int)*selectedClientListSize - 1){
+		if(currentSelection == (int)*selectedClientListSize - 1 or !((currentSelection + 1) % selectionFitAmount)){
+			if(!allowCircularNavigation){
+				ret;
+			}
+			currentSelection -= currentSelection % selectionFitAmount;
+			jmp updateWindow;
+		}
 		inc currentSelection;
 		jmp updateWindow;
 	}
-	if(currentSelection == -1 or allowCircularNavigation){
-		currentSelection = 0;
+	selectAbove:{
+		if(currentSelection == -1){
+			const uint height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
+			currentSelection = (height - 1) * selectionFitAmount + selectionFitAmount / 2;
+			if(currentSelection > (int)*selectedClientListSize - 1){
+				currentSelection = *selectedClientListSize - 1;
+			}
+			jmp updateWindow;
+		}
+		if(currentSelection < (int)selectionFitAmount){
+			uint height;
+			if(!allowCircularNavigation){
+				ret;
+			}
+			height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
+			currentSelection += (height - 1) * selectionFitAmount;
+			if(currentSelection > (int)*selectedClientListSize - 1){
+				currentSelection -= selectionFitAmount;
+			}
+			jmp updateWindow;
+		}
+		currentSelection -= selectionFitAmount;
 		jmp updateWindow;
 	}
-	ret;
+	selectBelow:{
+		if(currentSelection == -1){
+			currentSelection = selectionFitAmount / 2;
+			if(currentSelection > (int)*selectedClientListSize - 1){
+				currentSelection = *selectedClientListSize - 1;
+			}
+			jmp updateWindow;
+		}
+		if(currentSelection > (int)(*selectedClientListSize - selectionFitAmount - 1)){
+			uint height;
+			if(!allowCircularNavigation){
+				ret;
+			}
+			height = *selectedClientListSize / selectionFitAmount + !!(*selectedClientListSize % selectionFitAmount);
+			currentSelection -= (height - 1) * selectionFitAmount;
+			if(currentSelection < 0){
+				currentSelection += selectionFitAmount;
+			}
+			jmp updateWindow;
+		}
+		currentSelection += selectionFitAmount;
+		jmp updateWindow;
+	}
 	updateWindow:{
 		if(mapped){
 			drawWindow(NULL);
 		}
 		ret;
 	}
-}
-SELECTLEFTSELECTIONCOMMAND(){
-	if(!clientOrder or !selectionFitAmount or !*selectedClientListSize){
-		ret;
-	}
-	switch selectionAxis over
-		to HORIZONTAL_AXIS: /*-*/ selectLeftSelection(); /*--*/ ret;
-		to VERTICAL_AXIS: /*---*/ selectAboveSelection(); /*-*/ ret;
-		off: /*----------------*/ /*-------------------------*/ ret;
-	end
-}
-SELECTRIGHTSELECTIONCOMMAND(){
-	if(!clientOrder or !selectionFitAmount or !*selectedClientListSize){
-		ret;
-	}
-	switch selectionAxis over
-		to HORIZONTAL_AXIS: /*-*/ selectRightSelection(); /*-*/ ret;
-		to VERTICAL_AXIS: /*---*/ selectBelowSelection(); /*-*/ ret;
-		off: /*----------------*/ /*-------------------------*/ ret;
-	end
-}
-SELECTABOVESELECTIONCOMMAND(){
-	if(!clientOrder or !selectionFitAmount or !*selectedClientListSize){
-		ret;
-	}
-	switch selectionAxis over
-		to HORIZONTAL_AXIS: /*-*/ selectAboveSelection(); /*-*/ ret;
-		to VERTICAL_AXIS: /*---*/ selectLeftSelection(); /*--*/ ret;
-		off: /*----------------*/ /*-------------------------*/ ret;
-	end
-}
-SELECTBELOWSELECTIONCOMMAND(){
-	if(!clientOrder or !selectionFitAmount or !*selectedClientListSize){
-		ret;
-	}
-	switch selectionAxis over
-		to HORIZONTAL_AXIS: /*-*/ selectBelowSelection(); /*-*/ ret;
-		to VERTICAL_AXIS: /*---*/ selectRightSelection(); /*-*/ ret;
-		off: /*----------------*/ /*-------------------------*/ ret;
-	end
 }
 RESTARTCOMMAND(){
 	shmDisconnect();
