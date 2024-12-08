@@ -108,14 +108,13 @@ SOFTWARE. */
 	#include <sys/shm.h>
 	#include <sys/stat.h>
 	#include <xcb/randr.h>
-	#include <xcb/render.h>
 	#include <xcb/xcb.h>
 	#include <xcb/xcbext.h>
 	#include "cold/cold.hold"
 /*!}*/
 
 /*!defines:{*/
-	#define DEBUG /*------------------------------------*/ (true)
+	#define DEBUG /*------------------------------------*/ (false)
 
 	#define PROGRAM_NAME /*-----------------------------*/ "microtabber"
 
@@ -387,7 +386,6 @@ SOFTWARE. */
 	#define UNSETSHORTCUTROOT() /*----------------------*/ local void               unsetShortcutRoot(ShortcutNodeRoot *root)
 	#define UNGRABSHORTCUTS() /*------------------------*/ local void               ungrabShortcuts(void)
 	#define RANDRQUERYVERSIONUNCHECKED() /*-------------*/ local xcb_void_cookie_t  randrQueryVersionUnchecked(xcb_connection_t *const connection, const uint32 majorVersion, const uint32 minorVersion)
-	#define RENDERQUERYVERSIONUNCHECKED() /*------------*/ local xcb_void_cookie_t  renderQueryVersionUnchecked(xcb_connection_t *const connection, const uint32 majorVersion, const uint32 minorVersion)
 	#define SETCONFIGVARIABLES() /*---------------------*/ local void               setConfigVariables(void)
 	#define READCONFIG() /*-----------------------------*/ local void               readConfig(const bool createConfigFile, const char *const configPath, int (*getConfigChar)(FILE *file))
 	#define MATCHNAMELIST() /*--------------------------*/ local uint8              matchNameList(StringNodeRoot *const root, const char *const statementWall, char **statementCurrentReturn, uint8 *const valueReturn)
@@ -455,10 +453,9 @@ SOFTWARE. */
 		#define printXEvent(n) /*--*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %s%s:%s %s\n", colorStart, programName, colorEvent \
 			, n ==   baseEventName?           "X event" \
 			: n ==  randrEventName?     "randr X event" \
-			: n == renderEventName?    "render X event" \
 			:                       "extension X event" \
 			, colorEnd \
-			, n != baseEventName and n != randrEventName and n != renderEventName? \
+			, n != baseEventName and n != randrEventName? \
 			"unhandled extension event" : *(n + (((*event).response_type & ~b(10000000)) >= countof(n)? countof(n) - 1 : (*event).response_type & ~b(10000000))) \
 		))
 		#define printCommand(s) /*-*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %scommand " s ":%s %s\n", colorStart, programName, colorEvent, colorEnd, *(commandList + ((*eventModifierNode).command >= countof(commandList)? countof(commandList) - 1 : (*eventModifierNode).command))))
@@ -714,9 +711,6 @@ SOFTWARE. */
 	local uint8 /*------------------------*/ randrMajorOpcode;
 	local uint8 /*------------------------*/ randrBaseEvent;
 	local uint8 /*------------------------*/ randrBaseError;
-	local uint8 /*------------------------*/ renderMajorOpcode;
-	local uint8 /*------------------------*/ renderBaseEvent;
-	local uint8 /*------------------------*/ renderBaseError;
 	local xcb_visualid_t /*---------------*/ visual;
 	local uint8 /*------------------------*/ depth;
 	local Atom /*-------------------------*/ atom;
@@ -734,9 +728,6 @@ SOFTWARE. */
 	local StringNodeRoot /*---------------*/ globalInstructionRoot;
 	local StringNodeRoot /*---------------*/ scope1ScopeInstructionRoot;
 	local StringNodeRoot /*---------------*/ booleanRoot;
-	local StringNodeRoot /*---------------*/ commandRoot;
-	local StringNodeRoot /*---------------*/ variableRoot;
-	local StringNodeRoot /*---------------*/ modifierRoot;
 	local StringNodeRoot /*---------------*/ commandRoot;
 	local StringNodeRoot /*---------------*/ variableRoot;
 	local StringNodeRoot /*---------------*/ modifierRoot;
@@ -829,12 +820,12 @@ SOFTWARE. */
 	local bool /*-------------------------*/ expectingSecondKeyRelease;
 	local uint8 /*------------------------*/ realKeyReleaseModifier;
 
+	local const char *const /*------------*/ baseEventName[] = {"error", "unrecognized", "key press", "key release", "button press", "button release", "motion notify", "enter notify", "leave notify", "focus in", "focus out", "keymap notify", "expose", "graphics expose", "no expose", "visibility notify", "create notify", "destroy notify", "unmap notify", "map notify", "map request", "reparent notify", "configure notify", "configure request", "gravity notify", "resize request", "circulate notify", "circulate request", "property notify", "selection clear", "selection request", "selection notify", "colormap notify", "client message", "mapping notify", "generic event"};
 	local const char *const /*------------*/ baseErrorName[] = {"unrecognized", "request", "value", "window", "pixmap", "atom", "cursor", "font", "match", "drawable", "access", "allocation", "colormap", "graphics context", "id choice", "name", "length", "implementation", "unrecognized"};
 	local const char *const /*------------*/ baseOperationName[] = {"unrecognized", "create window", "change window attributes", "get window attributes", "destroy window", "destroy subwindows", "change save set", "reparent window", "map window", "map subwindows", "unmap window", "unmap subwindows", "configure window", "circulate window", "get geometry", "query tree", "intern atom", "get atom name", "change property", "delete property", "get property", "list properties", "set selection owner", "get selection owner", "convert selection", "send event", "grab pointer", "ungrab pointer", "grab button", "ungrab button", "change active pointer grab", "grab keyboard", "ungrab keyboard", "grab key", "ungrab key", "allow events", "grab server", "ungrab server", "query pointer", "get motion events", "translate coordinates", "warp pointer", "set input focus", "get input focus", "query keymap", "open font", "close font", "query font", "query text extents", "list fonts", "list fonts with info", "set font path", "get font path", "create pixmap", "free pixmap", "create graphics context", "change graphics context", "copy graphics context", "set dashes", "set clip rectangles", "free graphics context", "clear area", "copy area", "copy plane", "poly point", "poly line", "poly segment", "poly rectangle", "poly arc", "fill poly", "poly fill rectangle", "poly fill arc", "put image", "get image", "poly text (8)", "poly text (16)", "image text (8)", "image text (16)", "create colormap", "free colormap", "copy colormap and free", "install colormap", "uninstall colormap", "list installed colormaps", "allocate color", "allocate named color", "allocate color cells", "allocate color planes", "free colors", "store colors", "store named color", "query colors", "lookup color", "create cursor", "create glyph cursor", "free cursor", "recolor cursor", "query best size", "query extension", "list extensions", "change keyboard mapping", "get keyboard mapping", "change keyboard control", "get keyboard control", "bell", "change pointer control", "get pointer control", "set screen saver", "get screen saver", "change hosts", "list hosts", "set access control", "set close down mode", "kill client", "rotate properties", "force screen saver", "set pointer mapping", "get pointer mapping", "set modifier mapping", "get modifier mapping", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "no", "unrecognized"};
+	local const char *const /*------------*/ randrEventName[] = {"screen change notify", "notify", "unrecognized"};
 	local const char *const /*------------*/ randrErrorName[] = {"bad output", "bad crtc", "bad mode", "bad provider", "unrecognized"};
 	local const char *const /*------------*/ randrOperationName[] = {"query version", "unrecognized", "set screen config", "unrecognized", "select input", "get screen info", "get screen size range", "set screen size", "get screen resources", "get output info", "list output properties", "query output property", "configure output property", "change output property", "delete output property", "get output property", "create mode", "destroy mode", "add output mode", "delete output mode", "get crtc info", "set crtc config", "get crtc gamma size", "get crtc gamma", "set crtc gamma", "get screen resources current", "set crtc transform", "get crtc transform", "get panning", "set panning", "set output primary", "get output primary", "get providers", "get provider info", "set provider offload sink", "set provider output source", "list provider properties", "query provider property", "configure provider property", "change provider property", "delete provider property", "get provider property", "get monitors", "set monitor", "delete monitor", "create lease", "free lease", "unrecognized"};
-	local const char *const /*------------*/ renderErrorName[] = {"picture format", "picture", "picture operation", "glyph set", "glyph", "unrecognized"};
-	local const char *const /*------------*/ renderOperationName[] = {"query version", "query picture formats", "query picture index values", "unrecognized", "create picture", "change picture", "set picture clip rectangles", "free picture", "composite", "unrecognized", "trapezoids", "triangles", "triangle strip", "triangle fan", "unrecognized", "unrecognized", "unrecognized", "create glyph set", "reference glyph set", "free glyph set", "add glyphs", "unrecognized", "free glyphs", "composite glyphs", "composite glyphs", "composite glyphs", "fill rectangles", "create cursor", "set picture transform", "query filters", "set picture filter", "create animated cursor", "add traps", "create solid fill", "create linear gradient", "create radial gradient", "create conical gradient", "unrecognized"};
 
 	local const char *const /*------------*/ globalScopesInstructionList[] = {
 		  "scope1"
@@ -1181,12 +1172,6 @@ SOFTWARE. */
 	#undef  getGlobalScope
 	#undef  getInstructionData
 	#undef  getInstruction
-
-	#if DEBUG
-	local const char *const /*------------*/ baseEventName[] = {"error", "unrecognized", "key press", "key release", "button press", "button release", "motion notify", "enter notify", "leave notify", "focus in", "focus out", "keymap notify", "expose", "graphics expose", "no expose", "visibility notify", "create notify", "destroy notify", "unmap notify", "map notify", "map request", "reparent notify", "configure notify", "configure request", "gravity notify", "resize request", "circulate notify", "circulate request", "property notify", "selection clear", "selection request", "selection notify", "colormap notify", "client message", "mapping notify", "generic event"};
-	local const char *const /*------------*/ randrEventName[] = {"screen change notify", "notify", "unrecognized"};
-	local const char *const /*------------*/ renderEventName[] = {"unrecognized"};
-	#endif
 /*!}*/
 
 /*!functions:{*/
@@ -1219,7 +1204,6 @@ SOFTWARE. */
 	UNSETSHORTCUTROOT();
 	UNGRABSHORTCUTS();
 	RANDRQUERYVERSIONUNCHECKED();
-	RENDERQUERYVERSIONUNCHECKED();
 	SETCONFIGVARIABLES();
 	READCONFIG();
 	MATCHNAMELIST();
@@ -1274,6 +1258,7 @@ SOFTWARE. */
 /*!}*/
 
 int main(int argumentAmount, const char *const *argument){
+	(void)baseEventName;
 	(void)setMemory;
 	(void)compositeImages;
 	(void)compositeImagesOver;
@@ -1322,6 +1307,7 @@ int main(int argumentAmount, const char *const *argument){
 		monitorToken /*--------------*/ = 0;
 		pixmap /*--------------------*/ = XCB_NONE;
 		gc /*------------------------*/ = XCB_NONE;
+		font /*----------------------*/ = XCB_NONE;
 		clientListSize /*------------*/ = 0;
 		clientListStart /*-----------*/ = NULL;
 		clientListToken /*-----------*/ = 0;
@@ -1345,9 +1331,6 @@ int main(int argumentAmount, const char *const *argument){
 		setStringRoot(&globalInstructionRoot);
 		setStringRoot(&scope1ScopeInstructionRoot);
 		setStringRoot(&booleanRoot);
-		setStringRoot(&commandRoot);
-		setStringRoot(&variableRoot);
-		setStringRoot(&modifierRoot);
 		setStringRoot(&commandRoot);
 		setStringRoot(&variableRoot);
 		setStringRoot(&modifierRoot);
@@ -1602,27 +1585,20 @@ int main(int argumentAmount, const char *const *argument){
 	checkExtensionAvailability:{
 		#define STRING(f) /*--------*/ { \
 			  f("RANDR") \
-			, f("RENDER") \
 		}
 		#define BASE_POINTER /*-----*/ { \
 			  &randrMajorOpcode \
 			, &randrBaseEvent \
 			, &randrBaseError \
-			, &renderMajorOpcode \
-			, &renderBaseEvent \
-			, &renderBaseError \
 		}
 		#define VERSION_FUNCTION /*-*/ { \
 			  &randrQueryVersionUnchecked \
-			, &renderQueryVersionUnchecked \
 		}
 		#define MAJOR_VERSION /*----*/ { \
 			  XCB_RANDR_MAJOR_VERSION \
-			, XCB_RENDER_MAJOR_VERSION \
 		}
 		#define MINOR_VERSION /*----*/ { \
 			  XCB_RANDR_MINOR_VERSION \
-			, XCB_RENDER_MINOR_VERSION \
 		}
 		char *nameStart[] = STRING(SELF);
 		uint lengthStart[] = STRING(lengthof);
@@ -2059,9 +2035,6 @@ int main(int argumentAmount, const char *const *argument){
 		bulkInsertString(&commandRoot, commandList);
 		bulkInsertString(&variableRoot, variableList);
 		bulkInsertString(&modifierRoot, modifierList);
-		bulkInsertString(&commandRoot, commandList);
-		bulkInsertString(&variableRoot, variableList);
-		bulkInsertString(&modifierRoot, modifierList);
 		bulkInsertString(&horizontalAlignmentRoot, horizontalAlignmentList);
 		bulkInsertString(&verticalAlignmentRoot, verticalAlignmentList);
 		bulkInsertString(&numberTypeRoot, numberTypeList);
@@ -2337,10 +2310,8 @@ int main(int argumentAmount, const char *const *argument){
 		#define isExtensionEvent(e) /*-*/ (eventType >= e##BaseEvent and eventType < e##BaseEvent + countof(e##EventName) - 1)
 		#define isExtensionError(e) /*-*/ (eventType >= e##BaseError and eventType < e##BaseError + countof(e##ErrorName) - 1)
 		const uint8 eventType = (*event).response_type & ~b(10000000);
-		if(isExtensionEvent(randr)) /*--*/ jmp switchRandrEvent;
-		if(isExtensionError(randr)) /*--*/ jmp switchRandrError;
-		if(isExtensionEvent(render)) /*-*/ jmp switchRenderEvent;
-		if(isExtensionError(render)) /*-*/ jmp switchRenderError;
+		if(isExtensionEvent(randr)) /*-*/ jmp switchRandrEvent;
+		if(isExtensionError(randr)) /*-*/ jmp switchRandrError;
 		printXEvent(baseEventName);
 		jmp unhandledEvent;
 		#undef  isExtensionError
@@ -2361,23 +2332,6 @@ int main(int argumentAmount, const char *const *argument){
 			to XCB_RANDR_BAD_CRTC: /*-----*/ jmp eventLoop;
 			to XCB_RANDR_BAD_MODE: /*-----*/ jmp eventLoop;
 			to XCB_RANDR_BAD_PROVIDER: /*-*/ jmp eventLoop;
-			off: /*-----------------------*/ jmp unrecognizedEvent;
-		end
-	}
-	switchRenderEvent:{
-		printXEvent(renderEventName);
-		switch ((*event).response_type & ~b(10000000)) - renderBaseEvent over
-			off: /*-*/ jmp unrecognizedEvent;
-		end
-	}
-	switchRenderError:{
-		printXError(renderErrorName);
-		switch ((*event).response_type & ~b(10000000)) - renderBaseError over
-			to XCB_RENDER_PICT_FORMAT: /*-*/ jmp eventLoop;
-			to XCB_RENDER_PICTURE: /*-----*/ jmp eventLoop;
-			to XCB_RENDER_PICT_OP: /*-----*/ jmp eventLoop;
-			to XCB_RENDER_GLYPH_SET: /*---*/ jmp eventLoop;
-			to XCB_RENDER_GLYPH: /*-------*/ jmp eventLoop;
 			off: /*-----------------------*/ jmp unrecognizedEvent;
 		end
 	}
@@ -3385,11 +3339,6 @@ UNGRABSHORTCUTS(){
 RANDRQUERYVERSIONUNCHECKED(){
 	xcb_void_cookie_t cookie;
 	cookie.sequence = xcb_randr_query_version_unchecked(connection, majorVersion, minorVersion).sequence;
-	ret cookie;
-}
-RENDERQUERYVERSIONUNCHECKED(){
-	xcb_void_cookie_t cookie;
-	cookie.sequence = xcb_render_query_version_unchecked(connection, majorVersion, minorVersion).sequence;
 	ret cookie;
 }
 SETCONFIGVARIABLES(){
@@ -7500,9 +7449,6 @@ EXITCOMMAND(){
 	deleteStringRoot(&modifierRoot);
 	deleteStringRoot(&variableRoot);
 	deleteStringRoot(&commandRoot);
-	deleteStringRoot(&modifierRoot);
-	deleteStringRoot(&variableRoot);
-	deleteStringRoot(&commandRoot);
 	deleteStringRoot(&booleanRoot);
 	deleteStringRoot(&scope1ScopeInstructionRoot);
 	deleteStringRoot(&globalInstructionRoot);
@@ -7641,11 +7587,9 @@ PRINTXERROR(){
 	printError("%s%s: %sX error event:%s %s error in %s operation using the 0x%x resource\n", colorStart, programName, colorError, colorEnd
 		, useErrorName(name, base)
 		: useErrorName(name, randr)
-		: useErrorName(name, render)
 		: "unrecognized"
 		, useErrorOperationName(name, base)
 		: useErrorOperationName(name, randr)
-		: useErrorOperationName(name, render)
 		: "unrecognized"
 	, (*error).resource_id);
 	ret;
