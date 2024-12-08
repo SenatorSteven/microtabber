@@ -1,9 +1,5 @@
 
 /*!
-	add the client pictures to the window using xrender.
-*/
-
-/*!
 	consider implementing a rectangle struct for rectangle elements:
 		struct{
 			v   int32 ----- x;
@@ -28,6 +24,7 @@
 
 /*!
 	future features:
+		add the client pictures.
 		support differently colored selections using _NET_WM_STATE's _NET_WM_STATE_DEMANDS_ATTENTION.
 		implement the drawing better to efficiently change something minor like a single window title.
 		order windows based on an x, y, or (x, y) order.
@@ -385,7 +382,7 @@ SOFTWARE. */
 	#define DELETESTRINGROOT() /*-----------------------*/ local void               deleteStringRoot(StringNodeRoot *root)
 	#define SETSHORTCUTROOT() /*------------------------*/ local void               setShortcutRoot(ShortcutNodeRoot *root)
 	#define INSERTSHORTCUT() /*-------------------------*/ local bool               insertShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier, const uint8 command, char *const string, const uint stringToken, const int32 field0, const int32 field1, const int32 field2, const int32 field3, const int32 field4)
-	#define GETNEXTSHORTCUT() /*------------------------*/ local bool               getNextShortcut(const ShortcutNodeRoot *const root, uint8 code, uint16 modifier, int *const nextOffset)
+	#define GETNEXTSHORTCUT() /*------------------------*/ local bool               getNextShortcut(const ShortcutNodeRoot *const root, const bool isRelease, uint8 code, uint16 modifier, int *const nextOffset)
 	#define REMOVESHORTCUT() /*-------------------------*/ local bool               removeShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier)
 	#define UNSETSHORTCUTROOT() /*----------------------*/ local void               unsetShortcutRoot(ShortcutNodeRoot *root)
 	#define UNGRABSHORTCUTS() /*------------------------*/ local void               ungrabShortcuts(void)
@@ -426,7 +423,7 @@ SOFTWARE. */
 	#define FINDCLIENTLISTSTACKINGWINDOW() /*-----------*/ local Client *           findClientListStackingWindow(const xcb_window_t window)
 	#define SHOWWINDOWCOMMAND() /*----------------------*/ local void               showWindowCommand(void)
 	#define SELECTSELECTIONCOMMAND() /*-----------------*/ local void               selectSelectionCommand(const uint8 selection)
-	#define RESTARTCOMMAND() /*-------------------------*/ local void               restartCommand(void)
+	#define RESTARTCOMMAND() /*-------------------------*/ local void               restartCommand(const bool isInsideConfig)
 	#define EXITCOMMAND() /*----------------------------*/ local void               exitCommand(void)
 	#define HIDEWINDOWCOMMAND() /*----------------------*/ local void               hideWindowCommand(void)
 	#define CANCELTHREADS() /*--------------------------*/ local void               cancelThreads(void)
@@ -480,7 +477,8 @@ SOFTWARE. */
 		const char * /*--------*/ label;
 		uint64 * /*------------*/ data;
 		uint32 /*--------------*/ token;
-		uint8 /*---------------*/ pad0[4];
+		uint32 /*--------------*/ line;
+		const char * /*--------*/ file;
 		int /*-----------------*/ (*free)(void *);
 	} Pointer;
 
@@ -490,17 +488,6 @@ SOFTWARE. */
 		uint16 /*--------------*/ allocated;
 		uint8 /*---------------*/ pad0[4];
 	} DynamicDataSegment;
-
-	def struct{
-		int32 /*---------------*/ leftX;
-		int32 /*---------------*/ rightX;
-		int32 /*---------------*/ topY;
-		int32 /*---------------*/ bottomY;
-		int32 /*---------------*/ w;
-		int32 /*---------------*/ h;
-		uint32 /*--------------*/ millimeterWidth;
-		uint32 /*--------------*/ millimeterHeight;
-	} Monitor;
 
 	def struct{
 		uint8 /*---------------*/ letter;
@@ -534,6 +521,8 @@ SOFTWARE. */
 		int32 /*---------------*/ field2;
 		int32 /*---------------*/ field3;
 		int32 /*---------------*/ field4;
+		bool /*----------------*/ hasBeenPressed;
+		uint8 /*---------------*/ pad0[7];
 	} ModifierNode;
 
 	def struct{
@@ -545,16 +534,6 @@ SOFTWARE. */
 		uint32 /*--------------*/ modifierAllocated;
 		uint32 /*--------------*/ modifierNotInUseOffset;
 	} ShortcutNodeRoot;
-
-	def struct{
-		void * /*--------------*/ data;
-		uint32 /*--------------*/ dataToken;
-		uint32 /*--------------*/ size;
-		int32 /*---------------*/ x;
-		int32 /*---------------*/ y;
-		int32 /*---------------*/ width;
-		int32 /*---------------*/ height;
-	} Image;
 
 	def struct{
 		xcb_atom_t /*----------*/ WM_NAME;
@@ -654,13 +633,26 @@ SOFTWARE. */
 		xcb_atom_t /*----------*/ _XROOTPMAP_ID;
 	} Atom;
 
+	def struct{
+		int32 /*---------------*/ leftX;
+		int32 /*---------------*/ rightX;
+		int32 /*---------------*/ topY;
+		int32 /*---------------*/ bottomY;
+		int32 /*---------------*/ w;
+		int32 /*---------------*/ h;
+		uint32 /*--------------*/ millimeterWidth;
+		uint32 /*--------------*/ millimeterHeight;
+	} Monitor;
 
-
-
-
-
-
-
+	def struct{
+		void * /*--------------*/ dataStart;
+		uint32 /*--------------*/ dataToken;
+		uint32 /*--------------*/ size;
+		int32 /*---------------*/ x;
+		int32 /*---------------*/ y;
+		int32 /*---------------*/ width;
+		int32 /*---------------*/ height;
+	} Image;
 
 	def struct{
 		uint8 * /*-------------*/ titleStart;
@@ -677,15 +669,6 @@ SOFTWARE. */
 		uint32 /*--------------*/ height;
 		Monitor * /*-----------*/ monitor;
 	} ElementRectangle;
-
-
-
-
-
-
-
-
-
 /*!}*/
 
 /*!globals:{*/
@@ -742,6 +725,10 @@ SOFTWARE. */
 	local uint32 /*-----------------------*/ monitorToken;
 	local xcb_colormap_t /*---------------*/ colormap;
 	local xcb_window_t /*-----------------*/ window;
+	local xcb_pixmap_t /*-----------------*/ pixmap;
+	local xcb_gcontext_t /*---------------*/ gc;
+	local uint /*-------------------------*/ pixmapWidth;
+	local uint /*-------------------------*/ pixmapHeight;
 	local bool /*-------------------------*/ displaySimpleConfigErrors;
 	local StringNodeRoot /*---------------*/ globalScopesInstructionRoot;
 	local StringNodeRoot /*---------------*/ globalInstructionRoot;
@@ -765,6 +752,72 @@ SOFTWARE. */
 	local StringNodeRoot /*---------------*/ macroRoot;
 	local ShortcutNodeRoot /*-------------*/ keycodeShortcut;
 	local ShortcutNodeRoot /*-------------*/ buttonShortcut;
+	local int /*--------------------------*/ windowX;
+	local int /*--------------------------*/ windowY;
+	local int /*--------------------------*/ windowXOffset;
+	local int /*--------------------------*/ windowYOffset;
+	local uint8 /*------------------------*/ windowHorizontalAlignment;
+	local uint8 /*------------------------*/ windowVerticalAlignment;
+	local uint /*-------------------------*/ windowWidth;
+	local uint /*-------------------------*/ windowHeight;
+	local uint8 /*------------------------*/ windowWidthType;
+	local uint8 /*------------------------*/ windowHeightType;
+	local uint /*-------------------------*/ selectionMargin;
+	local uint /*-------------------------*/ selectionPadding;
+	local uint /*-------------------------*/ selectionGap;
+	local int /*--------------------------*/ clientX;
+	local int /*--------------------------*/ clientY;
+	local int /*--------------------------*/ clientXOffset;
+	local int /*--------------------------*/ clientYOffset;
+	local uint8 /*------------------------*/ clientHorizontalAlignment;
+	local uint8 /*------------------------*/ clientVerticalAlignment;
+	local uint /*-------------------------*/ clientWidth;
+	local uint /*-------------------------*/ clientHeight;
+	local uint8 /*------------------------*/ clientWidthType;
+	local uint8 /*------------------------*/ clientHeightType;
+	local int /*--------------------------*/ titleX;
+	local int /*--------------------------*/ titleY;
+	local int /*--------------------------*/ titleXOffset;
+	local int /*--------------------------*/ titleYOffset;
+	local uint8 /*------------------------*/ titleHorizontalAlignment;
+	local uint8 /*------------------------*/ titleVerticalAlignment;
+	local uint /*-------------------------*/ titleWidth;
+	local uint /*-------------------------*/ titleHeight;
+	local uint8 /*------------------------*/ titleWidthType;
+	local uint8 /*------------------------*/ titleHeightType;
+	local uint8 /*------------------------*/ whichMonitor;
+	local uint8 /*------------------------*/ clientOrder;
+	local bool /*-------------------------*/ allowCircularNavigation;
+	local xcb_font_t /*-------------------*/ font;
+	local uint32 /*-----------------------*/ windowBackground;
+	local uint32 /*-----------------------*/ selectionBackground;
+	local uint32 /*-----------------------*/ clientBackground;
+	local uint32 /*-----------------------*/ titleForeground;
+	local uint32 /*-----------------------*/ titleBackground;
+	local uint32 /*-----------------------*/ selectedSelectionBackground;
+	local uint32 /*-----------------------*/ selectedClientBackground;
+	local uint32 /*-----------------------*/ selectedTitleForeground;
+	local uint32 /*-----------------------*/ selectedTitleBackground;
+	local uint8 /*------------------------*/ titlePosition;
+	local uint /*-------------------------*/ titleTextCutoff;
+	local uint8 /*------------------------*/ titleTextHorizontalAlignment;
+	local uint8 /*------------------------*/ titleTextVerticalAlignment;
+	local uint8 /*------------------------*/ selectedClient;
+	local uint8 /*------------------------*/ selectionAxis;
+	local uint /*-------------------------*/ selectionFitAmount;
+	local uint8 /*------------------------*/ selectionAction;
+	local uint /*-------------------------*/ windowCircleRadius;
+	local xcb_pixmap_t /*-----------------*/ circlePixmap;
+	local uint /*-------------------------*/ clientListSize;
+	local Client * /*---------------------*/ clientListStart;
+	local uint32 /*-----------------------*/ clientListToken;
+	local uint /*-------------------------*/ clientListStackingSize;
+	local Client * /*---------------------*/ clientListStackingStart;
+	local uint32 /*-----------------------*/ clientListStackingToken;
+	local uint * /*-----------------------*/ selectedClientListSize;
+	local Client ** /*--------------------*/ selectedClientListStart;
+	local bool /*-------------------------*/ mapped;
+	local int /*--------------------------*/ currentSelection;
 	local int /*--------------------------*/ keyPressNextOffset;
 	local int /*--------------------------*/ keyReleaseNextOffset;
 	local int /*--------------------------*/ buttonPressNextOffset;
@@ -775,116 +828,6 @@ SOFTWARE. */
 	local uint16 /*-----------------------*/ shortcutModifier;
 	local bool /*-------------------------*/ expectingSecondKeyRelease;
 	local uint8 /*------------------------*/ realKeyReleaseModifier;
-
-
-
-
-
-
-
-
-
-/*!*/
-
-	/*! globals */
-		local xcb_pixmap_t /*-----------------*/ pixmap;
-		local xcb_gcontext_t /*---------------*/ gc;
-		local uint /*-------------------------*/ pixmapWidth;
-		local uint /*-------------------------*/ pixmapHeight;
-
-		local uint /*-------------------------*/ clientListSize;
-		local Client * /*---------------------*/ clientListStart;
-		local uint32 /*-----------------------*/ clientListToken;
-
-		local uint /*-------------------------*/ clientListStackingSize;
-		local Client * /*---------------------*/ clientListStackingStart;
-		local uint32 /*-----------------------*/ clientListStackingToken;
-
-		local uint * /*-----------------------*/ selectedClientListSize;
-		local Client ** /*--------------------*/ selectedClientListStart;
-
-		local bool /*-------------------------*/ mapped;
-
-		local int /*--------------------------*/ currentSelection;
-
-		local xcb_pixmap_t /*-----------------*/ circlePixmap;
-
-
-
-	/*! config */
-		local int /*--------------------------*/ windowX;
-		local int /*--------------------------*/ windowY;
-		local int /*--------------------------*/ windowXOffset;
-		local int /*--------------------------*/ windowYOffset;
-		local uint8 /*------------------------*/ windowHorizontalAlignment;
-		local uint8 /*------------------------*/ windowVerticalAlignment;
-		local uint /*-------------------------*/ windowWidth;
-		local uint /*-------------------------*/ windowHeight;
-		local uint8 /*------------------------*/ windowWidthType;
-		local uint8 /*------------------------*/ windowHeightType;
-
-		local uint /*-------------------------*/ selectionMargin;
-		local uint /*-------------------------*/ selectionPadding;
-		local uint /*-------------------------*/ selectionGap;
-
-		local int /*--------------------------*/ clientX;
-		local int /*--------------------------*/ clientY;
-		local int /*--------------------------*/ clientXOffset;
-		local int /*--------------------------*/ clientYOffset;
-		local uint8 /*------------------------*/ clientHorizontalAlignment;
-		local uint8 /*------------------------*/ clientVerticalAlignment;
-		local uint /*-------------------------*/ clientWidth;
-		local uint /*-------------------------*/ clientHeight;
-		local uint8 /*------------------------*/ clientWidthType;
-		local uint8 /*------------------------*/ clientHeightType;
-
-		local int /*--------------------------*/ titleX;
-		local int /*--------------------------*/ titleY;
-		local int /*--------------------------*/ titleXOffset;
-		local int /*--------------------------*/ titleYOffset;
-		local uint8 /*------------------------*/ titleHorizontalAlignment;
-		local uint8 /*------------------------*/ titleVerticalAlignment;
-		local uint /*-------------------------*/ titleWidth;
-		local uint /*-------------------------*/ titleHeight;
-		local uint8 /*------------------------*/ titleWidthType;
-		local uint8 /*------------------------*/ titleHeightType;
-
-		local uint8 /*------------------------*/ whichMonitor;
-
-		local uint8 /*------------------------*/ clientOrder;
-		local bool /*-------------------------*/ allowCircularNavigation;
-
-		local xcb_font_t /*-------------------*/ font;
-
-		local uint32 /*-----------------------*/ windowBackground;
-		local uint32 /*-----------------------*/ selectionBackground;
-		local uint32 /*-----------------------*/ clientBackground;
-		local uint32 /*-----------------------*/ titleForeground;
-		local uint32 /*-----------------------*/ titleBackground;
-		local uint32 /*-----------------------*/ selectedSelectionBackground;
-		local uint32 /*-----------------------*/ selectedClientBackground;
-		local uint32 /*-----------------------*/ selectedTitleForeground;
-		local uint32 /*-----------------------*/ selectedTitleBackground;
-
-		local uint8 /*------------------------*/ titlePosition;
-		local uint /*-------------------------*/ titleTextCutoff;
-		local uint8 /*------------------------*/ titleTextHorizontalAlignment;
-		local uint8 /*------------------------*/ titleTextVerticalAlignment;
-		local uint8 /*------------------------*/ selectedClient;
-		local uint8 /*------------------------*/ selectionAxis;
-		local uint /*-------------------------*/ selectionFitAmount;
-		local uint8 /*------------------------*/ selectionAction;
-		local uint /*-------------------------*/ windowCircleRadius;
-
-/*!*/
-
-
-
-
-
-
-
-
 
 	local const char *const /*------------*/ baseErrorName[] = {"unrecognized", "request", "value", "window", "pixmap", "atom", "cursor", "font", "match", "drawable", "access", "allocation", "colormap", "graphics context", "id choice", "name", "length", "implementation", "unrecognized"};
 	local const char *const /*------------*/ baseOperationName[] = {"unrecognized", "create window", "change window attributes", "get window attributes", "destroy window", "destroy subwindows", "change save set", "reparent window", "map window", "map subwindows", "unmap window", "unmap subwindows", "configure window", "circulate window", "get geometry", "query tree", "intern atom", "get atom name", "change property", "delete property", "get property", "list properties", "set selection owner", "get selection owner", "convert selection", "send event", "grab pointer", "ungrab pointer", "grab button", "ungrab button", "change active pointer grab", "grab keyboard", "ungrab keyboard", "grab key", "ungrab key", "allow events", "grab server", "ungrab server", "query pointer", "get motion events", "translate coordinates", "warp pointer", "set input focus", "get input focus", "query keymap", "open font", "close font", "query font", "query text extents", "list fonts", "list fonts with info", "set font path", "get font path", "create pixmap", "free pixmap", "create graphics context", "change graphics context", "copy graphics context", "set dashes", "set clip rectangles", "free graphics context", "clear area", "copy area", "copy plane", "poly point", "poly line", "poly segment", "poly rectangle", "poly arc", "fill poly", "poly fill rectangle", "poly fill arc", "put image", "get image", "poly text (8)", "poly text (16)", "image text (8)", "image text (16)", "create colormap", "free colormap", "copy colormap and free", "install colormap", "uninstall colormap", "list installed colormaps", "allocate color", "allocate named color", "allocate color cells", "allocate color planes", "free colors", "store colors", "store named color", "query colors", "lookup color", "create cursor", "create glyph cursor", "free cursor", "recolor cursor", "query best size", "query extension", "list extensions", "change keyboard mapping", "get keyboard mapping", "change keyboard control", "get keyboard control", "bell", "change pointer control", "get pointer control", "set screen saver", "get screen saver", "change hosts", "list hosts", "set access control", "set close down mode", "kill client", "rotate properties", "force screen saver", "set pointer mapping", "get pointer mapping", "set modifier mapping", "get modifier mapping", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "unrecognized", "no", "unrecognized"};
@@ -1377,6 +1320,15 @@ int main(int argumentAmount, const char *const *argument){
 		connectionToken /*-----------*/ = 0;
 		monitorStart /*--------------*/ = NULL;
 		monitorToken /*--------------*/ = 0;
+		pixmap /*--------------------*/ = XCB_NONE;
+		gc /*------------------------*/ = XCB_NONE;
+		clientListSize /*------------*/ = 0;
+		clientListStart /*-----------*/ = NULL;
+		clientListToken /*-----------*/ = 0;
+		clientListStackingSize /*----*/ = 0;
+		clientListStackingStart /*---*/ = NULL;
+		clientListStackingToken /*---*/ = 0;
+		mapped /*--------------------*/ = false;
 		keyPressNextOffset /*--------*/ = 0;
 		keyReleaseNextOffset /*------*/ = 0;
 		buttonPressNextOffset /*-----*/ = 0;
@@ -1386,43 +1338,6 @@ int main(int argumentAmount, const char *const *argument){
 		shortcutCode /*--------------*/ = 0;
 		shortcutModifier /*----------*/ = XCB_NONE;
 		expectingSecondKeyRelease /*-*/ = false;
-
-
-
-
-
-
-
-
-
-/*!*/
-
-		pixmap /*--------------------*/ = XCB_NONE;
-		gc /*------------------------*/ = XCB_NONE;
-
-
-
-		mapped /*--------------------*/ = false;
-
-
-
-		clientListSize /*------------*/ = 0;
-		clientListStart /*-----------*/ = NULL;
-		clientListToken /*-----------*/ = 0;
-		clientListStackingSize /*----*/ = 0;
-		clientListStackingStart /*---*/ = NULL;
-		clientListStackingToken /*---*/ = 0;
-
-/*!*/
-
-
-
-
-
-
-
-
-
 		setConfigVariables();
 		initMemoryManager();
 		shmInit();
@@ -2164,8 +2079,7 @@ int main(int argumentAmount, const char *const *argument){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
 		displaySimpleConfigErrors = true;
-		restartCommand();
-		setConfigVariables();
+		restartCommand(false);
 		readConfig(true, configPath, fgetc);
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
@@ -2259,7 +2173,7 @@ int main(int argumentAmount, const char *const *argument){
 	}
 	keyPressEvent:{
 		#define e /*-*/ ((xcb_key_press_event_t *)event)
-		if(getNextShortcut(&keycodeShortcut, (*e).detail, (*e).state, &keyPressNextOffset)){
+		if(getNextShortcut(&keycodeShortcut, false, (*e).detail, (*e).state, &keyPressNextOffset)){
 			jmp switchCommandDown;
 		}
 		shortcutCode = 0;
@@ -2272,40 +2186,43 @@ int main(int argumentAmount, const char *const *argument){
 		#define e /*-*/ ((xcb_key_release_event_t *)event)
 		uint8 keycode = (*e).detail;
 		uint16 modifier = (*e).state;
-		if(keycode == shortcutCode and modifier == shortcutModifier){
-			if(!keyReleaseNextOffset){
-				xcb_query_keymap_reply_t *const reply = xcb_wait_for_reply(connection, xcb_query_keymap_unchecked(connection), NULL);
-				uint32 token = pushPointer(reply, "query keymap reply", iFree);
-				if(reply){
-					const bool isPressed = !!(*((*reply).keys + keycode / 8) & (1 << keycode % 8));
-					free(reply);
-					popPointer(token);
-					if(isPressed){
-						jmp eventLoop;
-					}
+		if(getNextShortcut(&keycodeShortcut, true, (*e).detail, (*e).state, &keyReleaseNextOffset)){
+			xcb_query_keymap_reply_t *const reply = xcb_wait_for_reply(connection, xcb_query_keymap_unchecked(connection), NULL);
+			uint32 token = pushPointer(reply, "query keymap reply", iFree);
+			if(reply){
+				const bool keyIsPressed = !!(*((*reply).keys + (*e).detail / 8) & (1 << (*e).detail % 8));
+				free(reply);
+				popPointer(token);
+				if(keyIsPressed){
+					keyReleaseNextOffset = 0;
+					jmp eventLoop;
 				}
 			}
-		}elif(keycode != shortcutCode and modifier == shortcutModifier){
+			jmp switchCommandUp;
+		}
+		if(keycode != shortcutCode and modifier == shortcutModifier){
 			expectingSecondKeyRelease = true;
 			realKeyReleaseModifier = shortcutModifier;
 			jmp eventLoop;
-		}elif(keycode == shortcutCode and modifier != shortcutModifier){
+		}
+		if(keycode == shortcutCode and modifier != shortcutModifier){
 			if(!expectingSecondKeyRelease){
 				jmp eventLoop;
 			}
 			keycode = shortcutCode;
 			modifier = realKeyReleaseModifier;
 			expectingSecondKeyRelease = false;
-		}
-		if(getNextShortcut(&keycodeShortcut, keycode, modifier, &keyReleaseNextOffset)){
-			jmp switchCommandUp;
+			keyReleaseNextOffset = 0;
+			if(getNextShortcut(&keycodeShortcut, true, keycode, modifier, &keyReleaseNextOffset)){
+				jmp switchCommandUp;
+			}
 		}
 		jmp eventLoop;
 		#undef  e
 	}
 	buttonPressEvent:{
 		#define e /*-*/ ((xcb_button_press_event_t *)event)
-		if(getNextShortcut(&buttonShortcut, (*e).detail, (*e).state, &buttonPressNextOffset)){
+		if(getNextShortcut(&buttonShortcut, false, (*e).detail, (*e).state, &buttonPressNextOffset)){
 			jmp switchCommandDown;
 		}
 		jmp eventLoop;
@@ -2313,7 +2230,7 @@ int main(int argumentAmount, const char *const *argument){
 	}
 	buttonReleaseEvent:{
 		#define e /*-*/ ((xcb_button_release_event_t *)event)
-		if(getNextShortcut(&buttonShortcut, (*e).detail, (*e).state, &buttonReleaseNextOffset)){
+		if(getNextShortcut(&buttonShortcut, true, (*e).detail, (*e).state, &buttonReleaseNextOffset)){
 			jmp switchCommandUp;
 		}
 		jmp eventLoop;
@@ -2341,34 +2258,34 @@ int main(int argumentAmount, const char *const *argument){
 		Client *client;
 		if(eventWindow == (*screen).root){
 			if(property == atom._NET_CLIENT_LIST){
+				if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+					printTitledError("pthread error", "could not lock globals write lock");
+				}
 				createClientList(&clientListSize, &clientListStart, &clientListToken, atom._NET_CLIENT_LIST);
 				if(clientOrder == CREATION_CLIENT_ORDER and mapped){
-					if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
-						printTitledError("pthread error", "could not lock globals write lock");
-					}
 					if(currentSelection > (int)*selectedClientListSize - 1){
 						currentSelection = *selectedClientListSize - 1;
 					}
 					drawWindow(NULL);
-					if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
-						printTitledError("pthread error", "could not unlock globals write lock");
-					}
+				}
+				if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+					printTitledError("pthread error", "could not unlock globals write lock");
 				}
 				jmp eventLoop;
 			}
 			if(property == atom._NET_CLIENT_LIST_STACKING){
+				if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+					printTitledError("pthread error", "could not lock globals write lock");
+				}
 				createClientList(&clientListStackingSize, &clientListStackingStart, &clientListStackingToken, atom._NET_CLIENT_LIST_STACKING);
 				if(clientOrder == STACKING_CLIENT_ORDER and mapped){
-					if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
-						printTitledError("pthread error", "could not lock globals write lock");
-					}
 					if(currentSelection > (int)*selectedClientListSize - 1){
 						currentSelection = *selectedClientListSize - 1;
 					}
 					drawWindow(NULL);
-					if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
-						printTitledError("pthread error", "could not unlock globals write lock");
-					}
+				}
+				if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+					printTitledError("pthread error", "could not unlock globals write lock");
 				}
 				jmp eventLoop;
 			}
@@ -2376,6 +2293,9 @@ int main(int argumentAmount, const char *const *argument){
 		}
 		if(eventWindow == window){
 			jmp eventLoop;
+		}
+		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock globals write lock");
 		}
 		if((client = findClientListWindow(eventWindow))){
 			free((*client).titleStart);
@@ -2400,13 +2320,10 @@ int main(int argumentAmount, const char *const *argument){
 			}
 		}
 		if(mapped){
-			if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
-				printTitledError("pthread error", "could not lock globals write lock");
-			}
 			drawWindow(NULL);
-			if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
-				printTitledError("pthread error", "could not unlock globals write lock");
-			}
+		}
+		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+			printTitledError("pthread error", "could not unlock globals write lock");
 		}
 		jmp eventLoop;
 		#undef  e
@@ -3329,6 +3246,7 @@ INSERTSHORTCUT(){
 	(*node).field2 = field2;
 	(*node).field3 = field3;
 	(*node).field4 = field4;
+	(*node).hasBeenPressed = false;
 	if(!*((*root).codeListStart + code)){
 		*((*root).codeListStart + code) = (*root).modifierNotInUseOffset;
 	}else{
@@ -3354,7 +3272,7 @@ INSERTSHORTCUT(){
 	ret true;
 }
 GETNEXTSHORTCUT(){
-	const ModifierNode *current = (*root).modifierStart;
+	ModifierNode *current = (*root).modifierStart;
 	int offset;
 	if(!*nextOffset){
 		offset = *((*root).codeListStart + code);
@@ -3368,9 +3286,13 @@ GETNEXTSHORTCUT(){
 		if(offset){
 			current += offset;
 			if((*current).modifier == modifier){
+				if(isRelease and !(*current).hasBeenPressed){
+					jmp findShortcutModifierLoopControl;
+				}
 				shortcutCode = code;
 				shortcutModifier = modifier;
 				eventModifierNode = current;
+				(*current).hasBeenPressed = !isRelease;
 				if((*current).nextOffset){
 					*nextOffset = current - (*root).modifierStart + (*current).nextOffset;
 					ret true;
@@ -3378,11 +3300,14 @@ GETNEXTSHORTCUT(){
 				*nextOffset = 0;
 				ret true;
 			}
-			offset = (*current).nextOffset;
-			jmp findShortcutModifierLoop;
+			jmp findShortcutModifierLoopControl;
 		}
 		*nextOffset = 0;
 		ret false;
+	}
+	findShortcutModifierLoopControl:{
+		offset = (*current).nextOffset;
+		jmp findShortcutModifierLoop;
 	}
 }
 REMOVESHORTCUT(){
@@ -3621,15 +3546,15 @@ READCONFIG(){
 	StringNodeRoot *const *instructionDataStartCopy;
 	StringNodeRoot *const *instructionDataCurrent;
 	StringNodeRoot *currentScopeInstructionRoot = &globalInstructionRoot;
-	image0Return.data = NULL;
+	image0Return.dataStart = NULL;
 	image0Return.dataToken = 0;
-	image1Return.data = NULL;
+	image1Return.dataStart = NULL;
 	image1Return.dataToken = 0;
-	image2Return.data = NULL;
+	image2Return.dataStart = NULL;
 	image2Return.dataToken = 0;
-	image3Return.data = NULL;
+	image3Return.dataStart = NULL;
 	image3Return.dataToken = 0;
-	image4Return.data = NULL;
+	image4Return.dataStart = NULL;
 	image4Return.dataToken = 0;
 	jmp setupPointers;
 	setupPointers:{
@@ -3764,15 +3689,15 @@ READCONFIG(){
 		popPointer(execute3Token);
 		free(execute4Return);
 		popPointer(execute4Token);
-		free(image0Return.data);
+		free(image0Return.dataStart);
 		popPointer(image0Return.dataToken);
-		free(image1Return.data);
+		free(image1Return.dataStart);
 		popPointer(image1Return.dataToken);
-		free(image2Return.data);
+		free(image2Return.dataStart);
 		popPointer(image2Return.dataToken);
-		free(image3Return.data);
+		free(image3Return.dataStart);
 		popPointer(image3Return.dataToken);
-		free(image4Return.data);
+		free(image4Return.dataStart);
 		popPointer(image4Return.dataToken);
 		name0Instruction = NULL;
 		name1Instruction = NULL;
@@ -3824,15 +3749,15 @@ READCONFIG(){
 		execute3Token = 0;
 		execute4Return = NULL;
 		execute4Token = 0;
-		image0Return.data = NULL;
+		image0Return.dataStart = NULL;
 		image0Return.dataToken = 0;
-		image1Return.data = NULL;
+		image1Return.dataStart = NULL;
 		image1Return.dataToken = 0;
-		image2Return.data = NULL;
+		image2Return.dataStart = NULL;
 		image2Return.dataToken = 0;
-		image3Return.data = NULL;
+		image3Return.dataStart = NULL;
 		image3Return.dataToken = 0;
-		image4Return.data = NULL;
+		image4Return.dataStart = NULL;
 		image4Return.dataToken = 0;
 		jmp getStatement;
 	}
@@ -4593,7 +4518,7 @@ READCONFIG(){
 				}
 				to RESTART_COMMAND:{
 					if(getConfigChar == getSharedCharacter){
-						jmp getStatementStart;
+						restartCommand(true);
 					}
 					jmp getStatementStart;
 				}
@@ -4786,7 +4711,18 @@ READCONFIG(){
 					jmp getStatementStart;
 				}
 				to WINDOW_BACKGROUND_VARIABLE:{
+					Image image;
 					windowBackground = integer0Return;
+					if(windowCircleRadius and createCircle(windowCircleRadius, windowBackground, &image)){
+						if(circlePixmap){
+							xcb_free_pixmap(connection, circlePixmap);
+						}
+						circlePixmap = xcb_generate_id(connection);
+						xcb_create_pixmap(connection, depth, circlePixmap, window, image.width, image.height);
+						xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, circlePixmap, gc, image.width, image.height, 0, 0, 0, depth, image.size, image.dataStart);
+						free(image.dataStart);
+						popPointer(image.dataToken);
+					}
 					jmp getStatementStart;
 				}
 				to SELECTION_BACKGROUND_VARIABLE:{
@@ -4867,26 +4803,14 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
-
-
-
-					/*!
-						use the right color here and update whenever
-
-						but how do i do this? keep a real and old values for the radius and color and only create this in drawWindow(), given that either the color or the radius are different?
-					*/
-
-					if(integer0Return and integer0Return != windowCircleRadius and createCircle(integer0Return, 0xFF171717, &image)){
-
-
-
+					if(integer0Return and integer0Return != windowCircleRadius and createCircle(integer0Return, windowBackground, &image)){
 						if(circlePixmap){
 							xcb_free_pixmap(connection, circlePixmap);
 						}
 						circlePixmap = xcb_generate_id(connection);
 						xcb_create_pixmap(connection, depth, circlePixmap, window, image.width, image.height);
-						xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, circlePixmap, gc, image.width, image.height, 0, 0, 0, depth, image.size, image.data);
-						free(image.data);
+						xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, circlePixmap, gc, image.width, image.height, 0, 0, 0, depth, image.size, image.dataStart);
+						free(image.dataStart);
 						popPointer(image.dataToken);
 						windowCircleRadius = integer0Return;
 					}
@@ -5938,7 +5862,7 @@ READIMAGE(){
 	successfulImage:{
 		fclose(file);
 		popPointer(fileToken);
-		(*image).data = data;
+		(*image).dataStart = data;
 		(*image).dataToken = dataToken;
 		ret SUCCESS_READ_CONFIG;
 	}
@@ -5971,6 +5895,9 @@ READIMAGE(){
 	#undef  FILE_HEADER_SIZE
 }
 FREECONFIGVARIABLES(){
+	if(font){
+		xcb_close_font(connection, font);
+	}
 	ret;
 }
 EXEC(){
@@ -6277,7 +6204,7 @@ CREATECIRCLE(){
 				jmp yLoop;
 			}
 		}
-		(*image).data = data;
+		(*image).dataStart = data;
 		(*image).dataToken = token;
 		(*image).size = width * height * sizeof(uint32);
 		(*image).x = 0;
@@ -6312,7 +6239,7 @@ COMPOSITEIMAGES(){
 			ret;
 		}
 	}
-	sourceCurrent = (uint32 *)(*source).data + sourceY * (*source).width + sourceX;
+	sourceCurrent = (uint32 *)(*source).dataStart + sourceY * (*source).width + sourceX;
 	if(destinationX < 0){
 		sourceCurrent -= destinationX;
 		destinationX = 0;
@@ -6323,7 +6250,7 @@ COMPOSITEIMAGES(){
 	}
 	sourceWidthWall = sourceCurrent + intersectionWidth;
 	sourceWall = sourceCurrent + intersectionHeight * (*source).width;
-	destinationCurrent = (uint32 *)(*destination).data + destinationY * (*destination).width + destinationX;
+	destinationCurrent = (uint32 *)(*destination).dataStart + destinationY * (*destination).width + destinationX;
 	jmp yLoop;
 	yLoop:{
 		if(sourceCurrent < sourceWall){
@@ -6670,7 +6597,7 @@ ROTATEIMAGE(){
 	const int oldSize = (*image).size;
 	uint32 *newData;
 	uint32 newDataToken;
-	uint32 *current = (*image).data;
+	uint32 *current = (*image).dataStart;
 	uint32 *const yWall = (void *)((uint8 *)current + oldSize);
 	uint32 *xWall = current + oldWidth;
 	int newWidth;
@@ -6736,10 +6663,10 @@ ROTATEIMAGE(){
 	}
 	success:{
 		if(deletePreviousData){
-			free((*image).data);
+			free((*image).dataStart);
 			popPointer((*image).dataToken);
 		}
-		(*image).data = newData;
+		(*image).dataStart = newData;
 		(*image).dataToken = newDataToken;
 		(*image).width = newWidth;
 		(*image).height = newHeight;
@@ -7536,8 +7463,11 @@ SELECTSELECTIONCOMMAND(){
 	}
 }
 RESTARTCOMMAND(){
-	shmDisconnect();
+	if(!isInsideConfig){
+		shmDisconnect();
+	}
 	freeConfigVariables();
+	setConfigVariables();
 	ungrabShortcuts();
 	unsetShortcutRoot(&buttonShortcut);
 	setShortcutRoot(&buttonShortcut);
@@ -7592,12 +7522,16 @@ HIDEWINDOWCOMMAND(){
 	}
 	xcb_unmap_window(connection, window);
 	mapped = false;
-	if(!clientOrder){
+	if(currentSelection == -1){
 		ret;
 	}
 	selectedWindow = (*(*selectedClientListStart + currentSelection)).window;
 	switch selectionAction over
 		to FOCUS_WINDOW_SELECTION_ACTION:{
+			xcb_set_input_focus(connection, XCB_INPUT_FOCUS_NONE, selectedWindow, getTimestamp());
+			ret;
+		}
+		to MOVE_TO_DESKTOP_SELECTION_ACTION:{
 			xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, selectedWindow, atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, 0, 1), NULL);
 			uint32 token = pushPointer(reply, "hideWindow() get property reply", iFree);
 			if(reply){
@@ -7612,15 +7546,11 @@ HIDEWINDOWCOMMAND(){
 					*(message.data.data32 + 2) = 0;
 					*(message.data.data32 + 3) = 0;
 					*(message.data.data32 + 4) = 0;
-					xcb_send_event(connection, false, (*screen).root, XCB_EVENT_MASK_NO_EVENT, &message);
+					xcb_send_event(connection, false, (*screen).root, XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, &message);
 				}
 				free(reply);
 				popPointer(token);
 			}
-			ret;
-		}
-		to MOVE_TO_DESKTOP_SELECTION_ACTION:{
-			xcb_set_input_focus(connection, XCB_INPUT_FOCUS_NONE, selectedWindow, getTimestamp());
 			ret;
 		}
 		off:{
