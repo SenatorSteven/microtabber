@@ -1,32 +1,10 @@
 
 /*!
-	consider implementing a rectangle struct for rectangle elements:
-		struct{
-			v   int32 ----- x;
-			v   int32 ----- y;
-			v   uint32 ---- width;
-			v   uint32 ---- height;
-			  x uint32 ---- border;
-			  x uint32 ---- backgroundColor;
-			  x uint32 ---- borderColor;
-			  x uint32 ---- position;        *fixed, relative, maybe something else*
-			  x uint32 ---- marginTop;
-			  x uint32 ---- marginBottom;
-			  x uint32 ---- marginLeft;
-			  x uint32 ---- marginRight;
-			  x uint32 ---- paddingTop;
-			  x uint32 ---- paddingBottom;
-			  x uint32 ---- paddingLeft;
-			  x uint32 ---- paddingRight;
-			v   Monitor * - monitor;
-		} ElementRectangle;
-*/
-
-/*!
 	future features:
+		implement a way of storing element data. through that, when something changes just update that data. once that happens draw the elements from memory. that way we can easily check clicking on the elements afterwards.
+		add pointer support.
 		add the client pictures.
 		support differently colored selections using _NET_WM_STATE's _NET_WM_STATE_DEMANDS_ATTENTION.
-		implement the drawing better to efficiently change something minor like a single window title.
 		order windows based on an x, y, or (x, y) order.
 		check validity of window unmap event.
 		check validity of window map event.
@@ -114,7 +92,7 @@ SOFTWARE. */
 /*!}*/
 
 /*!defines:{*/
-	#define DEBUG /*------------------------------------*/ (false)
+	#define DEBUG /*------------------------------------*/ (true)
 
 	#define PROGRAM_NAME /*-----------------------------*/ "microtabber"
 
@@ -409,11 +387,13 @@ SOFTWARE. */
 	#define TWOPASSBOXBLUR() /*-------------------------*/ local void               twoPassBoxBlur(const int width, const int height, const int boxSize, uint32 *destinationData)
 	#define ROTATEIMAGE() /*----------------------------*/ local bool               rotateImage(const uint8 rotation, Image *const image, const bool deletePreviousData)
 	#define FILLDRAWABLE() /*---------------------------*/ local void               fillDrawable(const xcb_drawable_t drawable, const xcb_gcontext_t gc, const int16 x, const int16 y, const uint16 width, const uint16 height, const uint32 color)
+	#define CONFIGUREWINDOW() /*------------------------*/ local void               configureWindow(void)
+	#define GETWHICHMONITOR() /*------------------------*/ local Monitor *          getWhichMonitor(void)
+	#define GETWINDOWRECTANGLE() /*---------------------*/ local bool               getWindowRectangle(Monitor *const monitor, ElementRectangle *const rectangle)
+	#define GETFOCUSEDWINDOW() /*-----------------------*/ local xcb_window_t       getFocusedWindow(void)
 	#define CREATECLIENTLIST() /*-----------------------*/ local void               createClientList(uint *const listSize, Client **const listStart, uint32 *const listToken, const xcb_atom_t property)
 	#define GETCLIENTTITLE() /*-------------------------*/ local bool               getClientTitle(const xcb_atom_t property, const xcb_atom_t type, Client *const client)
 	#define COPYCLIENTTITLE() /*------------------------*/ local bool               copyClientTitle(uint length, void *const valueStart, const xcb_atom_t property, Client *const client)
-	#define GETWINDOWRECTANGLE() /*---------------------*/ local bool               getWindowRectangle(ElementRectangle *const rectangle)
-	#define GETFOCUSEDWINDOW() /*-----------------------*/ local xcb_window_t       getFocusedWindow(void)
 	#define SETWINDOWPROPERTIES() /*--------------------*/ local void               setWindowProperties(const int x, const int y, const uint width, const uint height)
 	#define DRAWWINDOW() /*-----------------------------*/ local void               drawWindow(ElementRectangle *windowRectangle)
 	#define GETWINDOWELEMENTRECTANGLE() /*--------------*/ local void               getWindowElementRectangle(const ElementRectangle *const windowRectangle, const int elementX, const int elementY, const int elementXOffset, const int elementYOffset, const uint8 elementHorizontalAlignment, const uint8 elementVerticalAlignment, const int elementWidth, const int elementHeight, const uint8 elementWidthType, const uint8 elementHeightType, ElementRectangle *const rectangle)
@@ -451,9 +431,9 @@ SOFTWARE. */
 
 	#if DEBUG
 		#define printXEvent(n) /*--*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %s%s:%s %s\n", colorStart, programName, colorEvent \
-			, n ==   baseEventName?           "X event" \
-			: n ==  randrEventName?     "randr X event" \
-			:                       "extension X event" \
+			, n ==  baseEventName?           "X event" \
+			: n == randrEventName?     "randr X event" \
+			:                      "extension X event" \
 			, colorEnd \
 			, n != baseEventName and n != randrEventName? \
 			"unhandled extension event" : *(n + (((*event).response_type & ~b(10000000)) >= countof(n)? countof(n) - 1 : (*event).response_type & ~b(10000000))) \
@@ -964,16 +944,19 @@ SOFTWARE. */
 		, "integer"
 		, "percentage"
 		, "millimeter"
+		, NULL
 	};
 	local const char *const /*------------*/ whichMonitorList[] = {
 		  "none"
 		, "pointer"
 		, "focused-window"
+		, NULL
 	};
 	local const char *const /*------------*/ clientOrderList[] = {
 		  "none"
 		, "creation"
 		, "stacking"
+		, NULL
 	};
 	local const char *const /*------------*/ titlePositionList[] = {
 		  "none"
@@ -981,6 +964,7 @@ SOFTWARE. */
 		, "below-client"
 		, "left-client"
 		, "right-client"
+		, NULL
 	};
 	local const char *const /*------------*/ selectedClientList[] = {
 		  "none"
@@ -1088,6 +1072,7 @@ SOFTWARE. */
 	local StringNodeRoot *const /*--------*/ ungrabKeycodeInstructionData[] = {&modifierRoot};
 	local StringNodeRoot *const /*--------*/ ungrabButtonInstructionData[] = {&modifierRoot};
 	local StringNodeRoot *const *const /*-*/ stopInstructionData = NULL;
+
 	local StringNodeRoot *const /*--------*/ executeDoSubinstructionData[] = {&commandRoot};
 	local StringNodeRoot *const /*--------*/ windowXSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ windowYSetSubinstructionData[] = {&variableRoot};
@@ -1227,11 +1212,13 @@ SOFTWARE. */
 	TWOPASSBOXBLUR();
 	ROTATEIMAGE();
 	FILLDRAWABLE();
+	CONFIGUREWINDOW();
+	GETWHICHMONITOR();
+	GETWINDOWRECTANGLE();
+	GETFOCUSEDWINDOW();
 	CREATECLIENTLIST();
 	GETCLIENTTITLE();
 	COPYCLIENTTITLE();
-	GETWINDOWRECTANGLE();
-	GETFOCUSEDWINDOW();
 	SETWINDOWPROPERTIES();
 	DRAWWINDOW();
 	GETWINDOWELEMENTRECTANGLE();
@@ -2019,6 +2006,7 @@ int main(int argumentAmount, const char *const *argument){
 		jmp storeMonitorsExit;
 	}
 	storeMonitorsExit:{
+		configureWindow();
 		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
@@ -2115,16 +2103,16 @@ int main(int argumentAmount, const char *const *argument){
 			to XCB_NO_EXPOSURE: /*-------*/ jmp unexpectedEvent;
 			to XCB_VISIBILITY_NOTIFY: /*-*/ jmp unexpectedEvent;
 			to XCB_CREATE_NOTIFY: /*-----*/ jmp unexpectedEvent;
-			to XCB_DESTROY_NOTIFY: /*----*/ jmp unexpectedEvent;
-			to XCB_UNMAP_NOTIFY: /*------*/ jmp unmapNotifyEvent;
-			to XCB_MAP_NOTIFY: /*--------*/ jmp mapNotifyEvent;
+			to XCB_DESTROY_NOTIFY: /*----*/ jmp eventLoop;
+			to XCB_UNMAP_NOTIFY: /*------*/ jmp eventLoop;
+			to XCB_MAP_NOTIFY: /*--------*/ jmp eventLoop;
 			to XCB_MAP_REQUEST: /*-------*/ jmp unexpectedEvent;
-			to XCB_REPARENT_NOTIFY: /*---*/ jmp unexpectedEvent;
-			to XCB_CONFIGURE_NOTIFY: /*--*/ jmp configureNotifyEvent;
+			to XCB_REPARENT_NOTIFY: /*---*/ jmp eventLoop;
+			to XCB_CONFIGURE_NOTIFY: /*--*/ jmp eventLoop;
 			to XCB_CONFIGURE_REQUEST: /*-*/ jmp unexpectedEvent;
-			to XCB_GRAVITY_NOTIFY: /*----*/ jmp unexpectedEvent;
+			to XCB_GRAVITY_NOTIFY: /*----*/ jmp eventLoop;
 			to XCB_RESIZE_REQUEST: /*----*/ jmp unexpectedEvent;
-			to XCB_CIRCULATE_NOTIFY: /*--*/ jmp unexpectedEvent;
+			to XCB_CIRCULATE_NOTIFY: /*--*/ jmp eventLoop;
 			to XCB_CIRCULATE_REQUEST: /*-*/ jmp unexpectedEvent;
 			to XCB_PROPERTY_NOTIFY: /*---*/ jmp propertyNotifyEvent;
 			to XCB_SELECTION_CLEAR: /*---*/ jmp unexpectedEvent;
@@ -2206,21 +2194,6 @@ int main(int argumentAmount, const char *const *argument){
 		if(getNextShortcut(&buttonShortcut, true, (*e).detail, (*e).state, &buttonReleaseNextOffset)){
 			jmp switchCommandUp;
 		}
-		jmp eventLoop;
-		#undef  e
-	}
-	unmapNotifyEvent:{
-		#define e /*-*/ ((xcb_unmap_notify_event_t *)event)
-		jmp eventLoop;
-		#undef  e
-	}
-	mapNotifyEvent:{
-		#define e /*-*/ ((xcb_map_notify_event_t *)event)
-		jmp eventLoop;
-		#undef  e
-	}
-	configureNotifyEvent:{
-		#define e /*-*/ ((xcb_configure_notify_event_t *)event)
 		jmp eventLoop;
 		#undef  e
 	}
@@ -5026,7 +4999,6 @@ READCONFIG(){
 		jmp postReadConfig;
 	}
 	postReadConfig:{
-		ElementRectangle rectangle;
 		createClientList(&clientListSize, &clientListStart, &clientListToken, atom._NET_CLIENT_LIST);
 		createClientList(&clientListStackingSize, &clientListStackingStart, &clientListStackingToken, atom._NET_CLIENT_LIST_STACKING);
 		switch clientOrder over
@@ -5034,21 +5006,7 @@ READCONFIG(){
 			to STACKING_CLIENT_ORDER: /*-*/ selectedClientListSize = &clientListStackingSize; /*-*/ selectedClientListStart = &clientListStackingStart; /*-*/ brk;
 			off: /*----------------------*/ selectedClientListSize = NULL; /*--------------------*/ selectedClientListStart = NULL; /*---------------------*/ brk;
 		end
-		if(mapped and getWindowRectangle(&rectangle) and rectangle.width and rectangle.height){
-			struct{
-				int32 /*--*/ x;
-				int32 /*--*/ y;
-				uint32 /*-*/ width;
-				uint32 /*-*/ height;
-			} valueList;
-			valueList.x = rectangle.x;
-			valueList.y = rectangle.y;
-			valueList.width = rectangle.width;
-			valueList.height = rectangle.height;
-			xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, &valueList);
-			setWindowProperties(valueList.x, valueList.y, valueList.width, valueList.height);
-			drawWindow(&rectangle);
-		}
+		configureWindow();
 		xcb_flush(connection);
 		ret;
 	}
@@ -5844,6 +5802,9 @@ READIMAGE(){
 	#undef  FILE_HEADER_SIZE
 }
 FREECONFIGVARIABLES(){
+	if(circlePixmap){
+		xcb_free_pixmap(connection, circlePixmap);
+	}
 	if(font){
 		xcb_close_font(connection, font);
 	}
@@ -6079,8 +6040,8 @@ GETPOINTERMONITOR(){
 }
 GETWINDOWMONITOR(){
 	if(monitorAllocated > 0){
-		const xcb_get_geometry_cookie_t geometryCookie = xcb_get_geometry_unchecked(connection, window);
-		const xcb_translate_coordinates_cookie_t translateCoordinatesCookie = xcb_translate_coordinates_unchecked(connection, window, (*screen).root, 0, 0);
+		const xcb_get_geometry_cookie_t geometryCookie = xcb_get_geometry(connection, window);
+		const xcb_translate_coordinates_cookie_t translateCoordinatesCookie = xcb_translate_coordinates(connection, window, (*screen).root, 0, 0);
 		xcb_get_geometry_reply_t *const getGeometryReply = xcb_wait_for_reply(connection, geometryCookie, NULL);
 		uint32 getGeometryToken = pushPointer(getGeometryReply, "getWindowMonitor() get geometry reply", iFree);
 		xcb_translate_coordinates_reply_t *const translateCoordinatesReply = xcb_wait_for_reply(connection, translateCoordinatesCookie, NULL);
@@ -6632,8 +6593,114 @@ FILLDRAWABLE(){
 	xcb_poly_fill_rectangle(connection, drawable, gc, 1, &rectangle);
 	ret;
 }
+CONFIGUREWINDOW(){
+	ElementRectangle rectangle;
+	if(mapped and getWindowRectangle(getWhichMonitor(), &rectangle) and rectangle.width and rectangle.height){
+		struct{
+			int32 /*--*/ x;
+			int32 /*--*/ y;
+			uint32 /*-*/ width;
+			uint32 /*-*/ height;
+		} valueList;
+		valueList.x = rectangle.x;
+		valueList.y = rectangle.y;
+		valueList.width = rectangle.width;
+		valueList.height = rectangle.height;
+		xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, &valueList);
+		setWindowProperties(valueList.x, valueList.y, valueList.width, valueList.height);
+		drawWindow(&rectangle);
+	}
+	ret;
+}
+GETWHICHMONITOR(){
+	switch whichMonitor over
+		to POINTER_WHICH_MONITOR:{
+			ret getPointerMonitor();
+		}
+		to FOCUSED_WINDOW_WHICH_MONITOR:{
+			const xcb_window_t window = getFocusedWindow();
+			if(window and window != (*screen).root){
+				ret getWindowMonitor(window);
+			}
+			ret getPointerMonitor();
+		}
+		off:{
+			ret NULL;
+		}
+	end
+}
+GETWINDOWRECTANGLE(){
+	int x;
+	int y;
+	uint width;
+	uint height;
+	if(!monitor){
+		ret false;
+	}
+	switch windowWidthType over
+		to INTEGER_NUMBER_TYPE: /*----*/ width = windowWidth; /*---------------------------------------------*/ brk;
+		to PERCENTAGE_NUMBER_TYPE: /*-*/ width = (*monitor).w * windowWidth / 100; /*------------------------*/ brk;
+		to MILLIMETER_NUMBER_TYPE: /*-*/ width = (*monitor).w * windowWidth / (*monitor).millimeterWidth; /*-*/ brk;
+		off: /*-----------------------*/ width = 0; /*-------------------------------------------------------*/ brk;
+	end
+	switch windowHeightType over
+		to INTEGER_NUMBER_TYPE: /*----*/ height = windowHeight; /*----------------------------------------------*/ brk;
+		to PERCENTAGE_NUMBER_TYPE: /*-*/ height = (*monitor).h * windowHeight / 100; /*-------------------------*/ brk;
+		to MILLIMETER_NUMBER_TYPE: /*-*/ height = (*monitor).h * windowHeight / (*monitor).millimeterHeight; /*-*/ brk;
+		off: /*-----------------------*/ height = 0; /*---------------------------------------------------------*/ brk;
+	end
+	switch windowHorizontalAlignment over
+		to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ x = (*monitor).leftX + windowXOffset; /*------------------------------*/ brk;
+		to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ x = (*monitor).leftX + ((*monitor).w - width) / 2 + windowXOffset; /*-*/ brk;
+		to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ x = (*monitor).rightX - width + windowXOffset; /*---------------------*/ brk;
+		off: /*----------------------------*/ x = windowX + windowXOffset; /*---------------------------------------*/ brk;
+	end
+	switch windowVerticalAlignment over
+		to TOP_VERTICAL_ALIGNMENT: /*----*/ y = (*monitor).topY + windowYOffset; /*-------------------------------*/ brk;
+		to CENTER_VERTICAL_ALIGNMENT: /*-*/ y = (*monitor).topY + ((*monitor).h - height) / 2 + windowYOffset; /*-*/ brk;
+		to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ y = (*monitor).bottomY - height + windowYOffset; /*-------------------*/ brk;
+		off: /*--------------------------*/ y = windowY + windowYOffset; /*---------------------------------------*/ brk;
+	end
+	(*rectangle).x = x;
+	(*rectangle).y = y;
+	(*rectangle).width = width;
+	(*rectangle).height = height;
+	(*rectangle).monitor = monitor;
+	ret true;
+}
+GETFOCUSEDWINDOW(){
+	xcb_window_t window = XCB_NONE;
+	jmp getActiveWindow;
+	getActiveWindow:{
+		xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*screen).root, atom._NET_ACTIVE_WINDOW, XCB_ATOM_WINDOW, 0, 1), NULL);
+		uint32 token = pushPointer(reply, "getFocusedWindow() get property reply", iFree);
+		bool found = false;
+		if(reply){
+			if(xcb_get_property_value_length(reply) == sizeof(xcb_window_t)){
+				window = *(xcb_window_t *)xcb_get_property_value(reply);
+				found = true;
+			}
+			free(reply);
+			popPointer(token);
+			if(found){
+				ret window;
+			}
+		}
+		jmp getFocusedWindow;
+	}
+	getFocusedWindow:{
+		xcb_get_input_focus_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_input_focus_unchecked(connection), NULL);
+		uint32 token = pushPointer(reply, "getFocusedWindow() get input focus reply", iFree);
+		if(reply){
+			window = (*reply).focus;
+			free(reply);
+			popPointer(token);
+		}
+		ret window;
+	}
+}
 CREATECLIENTLIST(){
-	xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*screen).root, property, XCB_ATOM_WINDOW, 0, 0xFFFFFFFF), NULL);
+	xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property(connection, false, (*screen).root, property, XCB_ATOM_WINDOW, 0, 0xFFFFFFFF), NULL);
 	uint32 token = pushPointer(reply, "createClientList() property reply", iFree);
 	if(reply){
 		const uint length = xcb_get_property_value_length(reply) / sizeof(xcb_window_t);
@@ -6693,7 +6760,7 @@ CREATECLIENTLIST(){
 	ret;
 }
 GETCLIENTTITLE(){
-	xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*client).window, property, type, 0, 0xFFFFFFFF), NULL);
+	xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property(connection, false, (*client).window, property, type, 0, 0xFFFFFFFF), NULL);
 	uint32 token = pushPointer(reply, "getClientTitle() property reply", iFree);
 	if(reply){
 		const bool returnValue = copyClientTitle(xcb_get_property_value_length(reply), xcb_get_property_value(reply), property, client);
@@ -6744,92 +6811,6 @@ COPYCLIENTTITLE(){
 	(*client).titleProperty = property;
 	ret true;
 }
-GETWINDOWRECTANGLE(){
-	Monitor *monitor;
-	int x;
-	int y;
-	uint width;
-	uint height;
-	switch whichMonitor over
-		to POINTER_WHICH_MONITOR:{
-			monitor = getPointerMonitor();
-			brk;
-		}
-		to FOCUSED_WINDOW_WHICH_MONITOR:{
-			const xcb_window_t window = getFocusedWindow();
-			if(!window or window == (*screen).root){
-				monitor = getPointerMonitor();
-				brk;
-			}
-			monitor = getWindowMonitor(window);
-			brk;
-		}
-		off:{
-			ret false;
-		}
-	end
-	switch windowWidthType over
-		to INTEGER_NUMBER_TYPE: /*----*/ width = windowWidth; /*---------------------------------------------*/ brk;
-		to PERCENTAGE_NUMBER_TYPE: /*-*/ width = (*monitor).w * windowWidth / 100; /*------------------------*/ brk;
-		to MILLIMETER_NUMBER_TYPE: /*-*/ width = (*monitor).w * windowWidth / (*monitor).millimeterWidth; /*-*/ brk;
-		off: /*-----------------------*/ width = 0; /*-------------------------------------------------------*/ brk;
-	end
-	switch windowHeightType over
-		to INTEGER_NUMBER_TYPE: /*----*/ height = windowHeight; /*----------------------------------------------*/ brk;
-		to PERCENTAGE_NUMBER_TYPE: /*-*/ height = (*monitor).h * windowHeight / 100; /*-------------------------*/ brk;
-		to MILLIMETER_NUMBER_TYPE: /*-*/ height = (*monitor).h * windowHeight / (*monitor).millimeterHeight; /*-*/ brk;
-		off: /*-----------------------*/ height = 0; /*---------------------------------------------------------*/ brk;
-	end
-	switch windowHorizontalAlignment over
-		to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ x = (*monitor).leftX + windowXOffset; /*------------------------------*/ brk;
-		to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ x = (*monitor).leftX + ((*monitor).w - width) / 2 + windowXOffset; /*-*/ brk;
-		to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ x = (*monitor).rightX - width + windowXOffset; /*---------------------*/ brk;
-		off: /*----------------------------*/ x = windowX + windowXOffset; /*---------------------------------------*/ brk;
-	end
-	switch windowVerticalAlignment over
-		to TOP_VERTICAL_ALIGNMENT: /*----*/ y = (*monitor).topY + windowYOffset; /*-------------------------------*/ brk;
-		to CENTER_VERTICAL_ALIGNMENT: /*-*/ y = (*monitor).topY + ((*monitor).h - height) / 2 + windowYOffset; /*-*/ brk;
-		to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ y = (*monitor).bottomY - height + windowYOffset; /*-------------------*/ brk;
-		off: /*--------------------------*/ y = windowY + windowYOffset; /*---------------------------------------*/ brk;
-	end
-	(*rectangle).x = x;
-	(*rectangle).y = y;
-	(*rectangle).width = width;
-	(*rectangle).height = height;
-	(*rectangle).monitor = monitor;
-	ret true;
-}
-GETFOCUSEDWINDOW(){
-	xcb_window_t window = XCB_NONE;
-	jmp getActiveWindow;
-	getActiveWindow:{
-		xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, (*screen).root, atom._NET_ACTIVE_WINDOW, XCB_ATOM_WINDOW, 0, 1), NULL);
-		uint32 token = pushPointer(reply, "getFocusedWindow() get property reply", iFree);
-		bool found = false;
-		if(reply){
-			if(xcb_get_property_value_length(reply)){
-				window = *(xcb_window_t *)xcb_get_property_value(reply);
-				found = true;
-			}
-			free(reply);
-			popPointer(token);
-			if(found){
-				ret window;
-			}
-		}
-		jmp getFocusedWindow;
-	}
-	getFocusedWindow:{
-		xcb_get_input_focus_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_input_focus_unchecked(connection), NULL);
-		uint32 token = pushPointer(reply, "getFocusedWindow() get input focus reply", iFree);
-		if(reply){
-			window = (*reply).focus;
-			free(reply);
-			popPointer(token);
-		}
-		ret window;
-	}
-}
 SETWINDOWPROPERTIES(){
 	const uint32 desktop = 0xFFFFFFFF;
 	const pid_t pid = getpid();
@@ -6859,7 +6840,6 @@ SETWINDOWPROPERTIES(){
 		uint32 /*-*/ initialState;
 	} hints;
 	char hostname[256];
-	uint hostnameLength;
 	xcb_atom_t type[1];
 	xcb_atom_t state[2];
 	normalHints.flags = USER_POSITION_NORMAL_HINT | USER_SIZE_NORMAL_HINT | PROGRAM_MINIMUM_SIZE_NORMAL_HINT | PROGRAM_MAXIMUM_SIZE_NORMAL_HINT | PROGRAM_RESIZE_INCREMENT_NORMAL_HINT | PROGRAM_ASPECT_NORMAL_HINT | PROGRAM_BASE_SIZE_NORMAL_HINT | PROGRAM_WINDOW_GRAVITY_NORMAL_HINT;
@@ -6887,8 +6867,7 @@ SETWINDOWPROPERTIES(){
 	if(gethostname(hostname, countof(hostname)) != GETHOSTNAME_SUCCESS){
 		printTitledError("get hostname error", "could not get hostname");
 	}
-	hostnameLength = findStringLength(hostname);
-	*(type + 0) = atom._NET_WM_WINDOW_TYPE_DOCK;
+	*(type + 0) = atom._NET_WM_WINDOW_TYPE_UTILITY;
 	*(state + 0) = atom._NET_WM_STATE_STICKY;
 	*(state + 1) = atom._NET_WM_STATE_ABOVE;
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_NAME, XCB_ATOM_STRING, bitsof(uint8), lengthof(PROGRAM_NAME), PROGRAM_NAME);
@@ -6896,7 +6875,7 @@ SETWINDOWPROPERTIES(){
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_NORMAL_HINTS, atom.WM_SIZE_HINTS, bitsof(uint32), sizeof(normalHints) / sizeof(uint32), &normalHints);
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_HINTS, atom.WM_HINTS, bitsof(uint32), sizeof(hints) / sizeof(uint32), &hints);
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_CLASS, XCB_ATOM_STRING, bitsof(uint8), lengthof(PROGRAM_NAME "\0" PROGRAM_NAME "\0"), PROGRAM_NAME "\0" PROGRAM_NAME "\0");
-	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_CLIENT_MACHINE, XCB_ATOM_STRING, bitsof(uint8), hostnameLength, hostname);
+	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_CLIENT_MACHINE, XCB_ATOM_STRING, bitsof(uint8), findStringLength(hostname), hostname);
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_NAME, atom.UTF8_STRING, bitsof(uint8), lengthof(PROGRAM_NAME), PROGRAM_NAME);
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_ICON_NAME, atom.UTF8_STRING, bitsof(uint8), lengthof(PROGRAM_NAME), PROGRAM_NAME);
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &desktop);
@@ -6930,7 +6909,7 @@ DRAWWINDOW(){
 	getRectangles:{
 		if(!windowRectangle){
 			windowRectangle = &_windowRectangle;
-			if(!getWindowRectangle(windowRectangle) or !(*windowRectangle).width or !(*windowRectangle).height){
+			if(!getWindowRectangle(getWhichMonitor(), windowRectangle) or !(*windowRectangle).width or !(*windowRectangle).height){
 				ret;
 			}
 		}
@@ -7200,7 +7179,7 @@ FINDCLIENTLISTSTACKINGWINDOW(){
 }
 SHOWWINDOWCOMMAND(){
 	ElementRectangle rectangle;
-	if(!mapped and getWindowRectangle(&rectangle) and rectangle.width and rectangle.height){
+	if(!mapped and getWindowRectangle(getWhichMonitor(), &rectangle) and rectangle.width and rectangle.height){
 		const xcb_timestamp_t userTime = getTimestamp();
 		struct{
 			int32 /*--*/ x;
@@ -7245,9 +7224,9 @@ SHOWWINDOWCOMMAND(){
 				}
 			end
 		}
-		xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &userTime);
 		xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_STACK_MODE, &valueList);
 		setWindowProperties(valueList.x, valueList.y, valueList.width, valueList.height);
+		xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &userTime);
 		drawWindow(&rectangle);
 		xcb_map_window(connection, window);
 		mapped = true;
@@ -7478,7 +7457,7 @@ HIDEWINDOWCOMMAND(){
 			ret;
 		}
 		to MOVE_TO_DESKTOP_SELECTION_ACTION:{
-			xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property_unchecked(connection, false, selectedWindow, atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, 0, 1), NULL);
+			xcb_get_property_reply_t *const reply = xcb_wait_for_reply(connection, xcb_get_property(connection, false, selectedWindow, atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, 0, 1), NULL);
 			uint32 token = pushPointer(reply, "hideWindow() get property reply", iFree);
 			if(reply){
 				if(xcb_get_property_value_length(reply)){
