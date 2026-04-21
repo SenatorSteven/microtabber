@@ -3,7 +3,7 @@
 
 MIT License
 
-Copyright (C) 2023 Stefanos "Steven" Tsakiris
+Copyright (C) 2022 Stefanos "Steven" Tsakiris
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 
-# [ˈmaɪ.kroʊ ˈtæb.ɚ]
-Window switcher for the X Window System
+# [kʰoʊld]
+A C language dialect library
+
+## Features
+- Header-only
+- Minimal changes from C
+- Additions that give it a look similar to that of Assembly languages
+- Aliases of select standard types and functions for clarity
+- Binary support
+- A second header that undoes all features, to allow for local usage of the library
 
